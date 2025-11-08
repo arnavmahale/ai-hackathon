@@ -2,13 +2,15 @@ name: Start Agent Analysis
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    {}
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write  # for optional comment; remove if not needed
+      pull-requests: read
 
     steps:
       - name: Checkout PR code
