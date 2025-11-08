@@ -46,7 +46,7 @@ jobs:
           files=$(tr '\n' ',' < changed_files.txt | sed 's/,$//')
           echo "files=$files" >> "$GITHUB_OUTPUT"
 
-            # Build payload folder on the runner
+      # Build payload folder on the runner
       - name: Build payload folder
         env:
           GH_TOKEN: ${{ github.token }}
