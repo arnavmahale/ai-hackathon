@@ -1,13 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  GitPullRequest,
-  Loader2,
-  RefreshCw,
-  Shield,
-} from 'lucide-react';
+import { ChevronRight, GitPullRequest, Loader2, RefreshCw, Shield } from 'lucide-react';
 import type { AgentRunState, PullRequest } from '../types';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -82,6 +74,12 @@ export function PRMonitor({
 }: PRMonitorProps) {
   const [active, setActive] = useState<'all' | string>('all');
 
+  const visiblePRs = useMemo(() => {
+    if (active === 'all') return pullRequests;
+    const selected = pullRequests.find((pr) => pr.id === active);
+    return selected ? [selected] : pullRequests;
+  }, [active, pullRequests]);
+
   const aggregate = useMemo(() => {
     return pullRequests.reduce(
       (acc, pr) => {
@@ -121,7 +119,7 @@ export function PRMonitor({
 
   return (
     <section className="mx-auto mt-10 flex max-w-6xl gap-6 px-6 pb-16 text-text">
-      <aside className="w-72 rounded-2xl border border-border bg-panel p-4">
+      <aside className="w-72 border-r border-border/60 pr-4">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-textMuted">
           PR Targets
         </p>
@@ -154,11 +152,11 @@ export function PRMonitor({
                 }`}
               >
                 <div>
-                  <p className="text-sm font-semibold">{pr.author.name}</p>
+                  <p className="text-sm font-semibold text-text">{pr.author.name}</p>
                   <p className="text-xs text-textMuted">PR #{pr.number}</p>
                   <p className="text-xs text-textMuted">
                     {run.status === 'running'
-                      ? 'Agent running…'
+                      ? 'Agent running...'
                       : `Last status: ${run.status.toUpperCase()}`}
                   </p>
                 </div>
@@ -170,10 +168,10 @@ export function PRMonitor({
       </aside>
 
       <div className="flex-1 space-y-6">
-        <header className="rounded-2xl border border-border bg-panel px-8 py-6">
+        <header className="border-b border-border/60 px-2 pb-8 md:px-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Step 3 · Monitor</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Step 3 / Monitor</p>
               <h1 className="text-[46px] font-semibold leading-tight text-text">
                 QA Agent Control Room
               </h1>
@@ -202,27 +200,20 @@ export function PRMonitor({
 
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
-              { label: 'Active PRs', value: aggregate.total, icon: <GitPullRequest className="h-4 w-4" /> },
-              { label: 'Running', value: aggregate.running, icon: <Loader2 className="h-4 w-4 animate-spin text-accent" /> },
-              { label: 'Cleared', value: aggregate.passed, icon: <CheckCircle2 className="h-4 w-4 text-success" /> },
-              {
-                label: 'Critical / Warn',
-                value: aggregate.critical + aggregate.warnings,
-                icon: <AlertTriangle className="h-4 w-4 text-warning" />,
-              },
+              { label: 'Active PRs', value: aggregate.total },
+              { label: 'Running', value: aggregate.running },
+              { label: 'Cleared', value: aggregate.passed },
+              { label: 'Critical / Warn', value: aggregate.critical + aggregate.warnings },
             ].map((stat) => (
-              <div key={stat.label} className="flex items-center gap-3 text-sm text-textMuted">
-                <div className="rounded-full bg-panelMuted p-3 text-textMuted">{stat.icon}</div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.35em]">{stat.label}</p>
-                  <p className="text-2xl font-semibold text-text">{stat.value}</p>
-                </div>
+              <div key={stat.label} className="space-y-2 text-sm text-textMuted">
+                <p className="text-xs uppercase tracking-[0.35em]">{stat.label}</p>
+                <p className="text-2xl font-semibold text-text">{stat.value}</p>
               </div>
             ))}
           </div>
         </header>
 
-        <div className="rounded-2xl border border-border bg-panel p-6">
+        <div className="rounded-2xl border border-border/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-textMuted">
             Run timeline
           </p>
@@ -242,7 +233,7 @@ export function PRMonitor({
                 <div
                   key={label}
                   className={`rounded-lg border px-3 py-2 text-center ${
-                    index <= activeStep ? 'border-accent text-text' : 'border-border'
+                    index <= activeStep ? 'border-accent text-text' : 'border-border/60 text-textMuted'
                   }`}
                 >
                   {label}
@@ -253,17 +244,17 @@ export function PRMonitor({
         </div>
 
         <div className="space-y-4">
-          {pullRequests.map((pr) => {
+          {visiblePRs.map((pr) => {
             const run = agentRuns[pr.id] ?? defaultRunState;
             return (
               <article
                 key={pr.id}
-                className={`rounded-2xl border border-border bg-panel p-6 transition hover:-translate-y-[2px] hover:bg-panelMuted ${statusColor(run.status)}`}
+                className={`rounded-2xl border border-border/70 bg-transparent p-6 transition hover:-translate-y-[2px] hover:bg-panelMuted/40 ${statusColor(run.status)}`}
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <span className="rounded-full bg-panelMuted px-3 py-1 text-xs font-semibold text-textMuted">
+                      <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-textMuted">
                         PR #{pr.number}
                       </span>
                       {statusBadge(run.status)}
@@ -278,7 +269,7 @@ export function PRMonitor({
                     <h3 className="text-xl font-semibold text-text">{pr.title}</h3>
                     <p className="text-sm text-textMuted">{pr.repository}</p>
                     <p className="text-xs text-textMuted">
-                      Files touched {pr.filesChanged} · ± {pr.linesAdded} / {pr.linesRemoved}
+                      Files touched {pr.filesChanged} | +{pr.linesAdded} / -{pr.linesRemoved}
                     </p>
                     <p className="text-xs font-semibold text-critical">
                       {pr.violations} violations
@@ -305,15 +296,15 @@ export function PRMonitor({
                       onClick={() => onRunSingle(pr.id)}
                       disabled={run.status === 'running'}
                     >
-                      {run.status === 'running' ? 'Running…' : 'Run Policy Check'}
+                      {run.status === 'running' ? 'Running...' : 'Run Policy Check'}
                     </Button>
                   </div>
                 </div>
               </article>
             );
           })}
-          {!pullRequests.length && (
-            <div className="rounded-2xl border border-dashed border-border bg-panel p-12 text-center text-textMuted">
+          {!visiblePRs.length && (
+            <div className="rounded-2xl border border-dashed border-border/70 p-12 text-center text-textMuted">
               <GitPullRequest className="mx-auto mb-4 h-12 w-12 text-textMuted" />
               <p className="text-xl font-semibold text-text">No active pull requests</p>
               <p className="text-sm text-textMuted">

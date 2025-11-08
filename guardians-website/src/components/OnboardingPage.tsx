@@ -42,7 +42,7 @@ export function OnboardingPage({
 
   return (
     <section className="mx-auto mt-8 max-w-6xl px-6 pb-20">
-      <div className="rounded-[40px] border border-border bg-panel px-12 py-16 text-center shadow-[0_60px_160px_rgba(0,0,0,0.65)]">
+      <div className="px-4 py-16 text-center md:px-12">
         <div className="mb-6 inline-flex items-center gap-2 text-xs uppercase tracking-[0.5em] text-textMuted">
           <Shield className="h-4 w-4 text-text" />
           Guardians of the Code
@@ -53,13 +53,13 @@ export function OnboardingPage({
         <p className="mx-auto mt-4 max-w-3xl text-base text-textMuted">
           Guardians ingests policy docs and transforms them into guardrails the agent enforces on every pull request.
         </p>
-        <div className="mt-10 grid gap-6 text-left md:grid-cols-3">
+        <div className="mt-10 grid gap-8 text-left md:grid-cols-3">
           {[
             { label: 'Teams onboarded', value: '143' },
             { label: 'Policies enforced per repo', value: '50+' },
             { label: 'Violations caught weekly', value: '1,200' },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-2xl border border-border bg-panelMuted px-6 py-4">
+            <div key={stat.label} className="border-l border-border/60 pl-6">
               <p className="text-xs uppercase tracking-[0.4em] text-textMuted">{stat.label}</p>
               <p className="mt-2 text-2xl font-semibold text-text">{stat.value}</p>
             </div>
@@ -94,7 +94,7 @@ export function OnboardingPage({
         />
         <CloudUpload className="mx-auto h-12 w-12 text-textMuted" />
         <h2 className="mt-4 text-2xl font-semibold text-text">Drag & drop documentation</h2>
-        <p className="mt-2 text-sm text-textMuted">PDF · TXT · Markdown · DOCX · JSON</p>
+        <p className="mt-2 text-sm text-textMuted">PDF / TXT / Markdown / DOCX / JSON</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm text-textMuted">
           {['Security', 'Architecture', 'Runbooks', 'API Specs'].map((chip) => (
             <span key={chip} className="rounded-full border border-border px-4 py-1">
@@ -107,12 +107,12 @@ export function OnboardingPage({
         </Button>
       </div>
 
-      <div className="mt-10 rounded-[32px] border border-border bg-panel p-6">
+      <div className="mt-10 rounded-[32px] border border-border/70 bg-transparent p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-textMuted">
               {files.length
-                ? `${files.length} files · ${(totalSize / 1024 / 1024).toFixed(2)} MB`
+                ? `${files.length} files | ${(totalSize / 1024 / 1024).toFixed(2)} MB`
                 : 'Add documentation to begin'}
             </p>
             <p className="text-lg font-semibold text-text">File queue</p>
@@ -133,9 +133,9 @@ export function OnboardingPage({
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+        <div className="mt-6 overflow-hidden rounded-2xl border border-border/70">
           <table className="min-w-full border-collapse text-left text-sm text-text">
-            <thead className="bg-panelMuted text-xs font-semibold uppercase tracking-[0.2em] text-textMuted">
+            <thead className="text-xs font-semibold uppercase tracking-[0.2em] text-textMuted">
               <tr>
                 <th className="px-4 py-3">File name</th>
                 <th className="px-4 py-3">Size</th>
@@ -144,7 +144,7 @@ export function OnboardingPage({
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border bg-panel">
+            <tbody className="divide-y divide-border">
               {files.length ? (
                 files.map((file) => (
                   <tr key={file.id} className="transition hover:bg-panelMuted/60">
@@ -178,12 +178,12 @@ export function OnboardingPage({
         </div>
 
         {isGenerating && (
-          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-border bg-panelMuted px-4 py-3 text-sm text-text">
+          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-border/70 px-4 py-3 text-sm text-text">
             <Loader2 className="h-4 w-4 animate-spin text-accent" />
             <div>
               <p className="font-medium">Analyzing documents…</p>
               <p className="text-xs text-textMuted">
-                {generationState.currentStep} · File {generationState.processedFiles} of{' '}
+                {generationState.currentStep} | File {generationState.processedFiles} of{' '}
                 {generationState.totalFiles}
               </p>
             </div>
@@ -191,7 +191,7 @@ export function OnboardingPage({
         )}
 
         {showSuccess && (
-          <div className="mt-6 flex items-center justify-between rounded-2xl border border-success/30 bg-panelMuted px-4 py-3 text-success">
+          <div className="mt-6 flex items-center justify-between rounded-2xl border border-success/30 px-4 py-3 text-success">
             <div className="text-sm">Documents analyzed successfully. View tasks.</div>
             <Button variant="outline" onClick={onViewTasks}>
               View tasks

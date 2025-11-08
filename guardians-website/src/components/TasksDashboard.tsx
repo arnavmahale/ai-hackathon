@@ -6,6 +6,8 @@ import {
   Play,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { Task, TaskCategory } from '../types';
 import { Button } from '../ui/button';
@@ -35,11 +37,13 @@ const severityFilters: Array<{ label: string; value: 'all' | Task['severity'] }>
   { label: 'Info', value: 'info' },
 ];
 
-const severityBorder: Record<Task['severity'], string> = {
-  critical: 'before:bg-critical',
-  warning: 'before:bg-warning',
-  info: 'before:bg-border',
+const severityLabels: Record<Task['severity'], string> = {
+  critical: 'Critical',
+  warning: 'Warning',
+  info: 'Info',
 };
+
+const severityOrder: Task['severity'][] = ['critical', 'warning', 'info'];
 
 export function TasksDashboard({
   tasks,
@@ -52,6 +56,11 @@ export function TasksDashboard({
   const [filter, setFilter] = useState<TaskCategory | 'All'>('All');
   const [severity, setSeverity] = useState<'all' | Task['severity']>('all');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<Task['severity'], boolean>>({
+    critical: false,
+    warning: false,
+    info: false,
+  });
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -64,6 +73,14 @@ export function TasksDashboard({
     });
   }, [tasks, search, filter, severity]);
 
+  const groupedTasks = useMemo(() => {
+    const order = severity === 'all' ? severityOrder : [severity];
+    return order.map((level) => ({
+      severity: level,
+      items: filteredTasks.filter((task) => task.severity === level),
+    }));
+  }, [filteredTasks, severity]);
+
   const criticalCount = tasks.filter((task) => task.severity === 'critical').length;
   const categoriesCovered = new Set(tasks.map((task) => task.category)).size;
 
@@ -74,6 +91,18 @@ export function TasksDashboard({
     anchor.download = 'guardians_tasks.json';
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const toggleGroup = (level: Task['severity']) => {
+    setOpenGroups((prev) => ({ ...prev, [level]: !prev[level] }));
+  };
+
+  const setAllGroups = (next: boolean) => {
+    setOpenGroups({
+      critical: next,
+      warning: next,
+      info: next,
+    });
   };
 
   return (
@@ -104,20 +133,20 @@ export function TasksDashboard({
         </div>
       </header>
 
-      <div className="mt-10 grid gap-4 md:grid-cols-[2fr_1fr_1fr]">
-        <div className="rounded-2xl border border-border bg-panel p-6">
+      <div className="mt-10 grid gap-8 md:grid-cols-3">
+        <div className="space-y-3 border-l border-border/70 pl-6">
           <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Total tasks</p>
-          <p className="mt-3 text-[46px] font-semibold text-text">{tasks.length}</p>
+          <p className="text-[46px] font-semibold text-text">{tasks.length}</p>
           <p className="text-sm text-textMuted">Rules ready for automation</p>
         </div>
-        <div className="rounded-2xl border border-border bg-panel p-6">
+        <div className="space-y-3 border-l border-border/70 pl-6">
           <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Critical issues</p>
-          <p className="mt-3 text-[34px] font-semibold text-text">{criticalCount}</p>
+          <p className="text-[34px] font-semibold text-text">{criticalCount}</p>
           <p className="text-sm text-textMuted">Blocks launches if failing</p>
         </div>
-        <div className="rounded-2xl border border-border bg-panel p-6">
+        <div className="space-y-3 border-l border-border/70 pl-6">
           <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Categories</p>
-          <p className="mt-3 text-[34px] font-semibold text-text">{categoriesCovered}</p>
+          <p className="text-[34px] font-semibold text-text">{categoriesCovered}</p>
           <p className="text-sm text-textMuted">Policy surfaces covered</p>
         </div>
       </div>
@@ -169,7 +198,7 @@ export function TasksDashboard({
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 text-sm font-medium text-textMuted">
+        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-textMuted">
           {severityFilters.map((pill) => {
             const active = severity === pill.value;
             return (
@@ -187,80 +216,141 @@ export function TasksDashboard({
               </button>
             );
           })}
+          {severity === 'all' && (
+            <>
+              <span className="mx-2 h-4 w-px bg-border/70" />
+              <button
+                type="button"
+                onClick={() => setAllGroups(true)}
+                className="inline-flex items-center gap-1 text-text hover:text-accent"
+              >
+                <ChevronDown className="h-4 w-4" />
+                Expand all
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllGroups(false)}
+                className="inline-flex items-center gap-1 text-text hover:text-accent"
+              >
+                <ChevronUp className="h-4 w-4" />
+                Collapse all
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="mt-10 space-y-4">
         <AnimatePresence>
           {filteredTasks.length ? (
-            filteredTasks.map((task) => {
-              const isExpanded = expandedTask === task.id;
+            groupedTasks.map((group) => {
+              if (!group.items.length) return null;
+              const forcedOpen = severity !== 'all';
+              const isOpen = forcedOpen || openGroups[group.severity];
               return (
-                <motion.article
-                  key={task.id}
-                  initial={{ opacity: 0, translateY: 8 }}
-                  animate={{ opacity: 1, translateY: 0 }}
-                  exit={{ opacity: 0, translateY: -8 }}
-                  className={`relative overflow-hidden rounded-2xl border border-border bg-panel p-6 transition hover:-translate-y-[2px] hover:bg-panelMuted ${severityBorder[task.severity]} before:absolute before:left-0 before:top-0 before:h-full before:w-1.5`}
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div key={group.severity} className="rounded-2xl border border-border/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-2xl font-semibold text-text">{task.title}</h3>
-                        <Badge variant="outline">{task.category}</Badge>
-                      </div>
-                      <p className="mt-3 text-sm text-textMuted">{task.description}</p>
-                      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-textMuted">
-                        {task.checkType}
+                      <p className="text-xs uppercase tracking-[0.35em] text-textMuted">
+                        {severityLabels[group.severity]}
                       </p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-mono text-textMuted">
-                        {task.fileTypes.map((ext) => (
-                          <span key={ext} className="rounded bg-panelMuted px-3 py-1">
-                            {ext}
-                          </span>
-                        ))}
-                      </div>
+                      <p className="text-lg font-semibold text-text">
+                        {group.items.length} {group.items.length === 1 ? 'task' : 'tasks'}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedTask(isExpanded ? null : task.id)}
-                      className="text-sm font-semibold text-accent transition hover:text-accentMuted"
-                    >
-                      {isExpanded ? 'Hide details' : 'View details'}
-                    </button>
-                  </div>
-
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
+                    <p className="text-sm text-textMuted">
+                      {group.severity === 'critical'
+                        ? 'Blocks release'
+                        : group.severity === 'warning'
+                          ? 'Needs follow up'
+                          : 'Informational'}
+                    </p>
+                    {severity === 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.severity)}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-text hover:text-accent"
                       >
-                        <div className="mt-6 grid gap-4 rounded-xl border border-border bg-panelMuted p-5 md:grid-cols-2">
-                          <div>
-                            <p className="flex items-center gap-2 text-sm font-semibold text-critical">
-                              <AlertTriangle className="h-4 w-4" />
-                              Example violation
-                            </p>
-                            <pre className="mt-2 whitespace-pre-wrap font-mono text-[13px] text-textMuted">
-                              {task.exampleViolation}
-                            </pre>
-                          </div>
-                          <div>
-                            <p className="flex items-center gap-2 text-sm font-semibold text-success">
-                              <CheckCircle2 className="h-4 w-4" />
-                              Suggested fix
-                            </p>
-                            <pre className="mt-2 whitespace-pre-wrap font-mono text-[13px] text-textMuted">
-                              {task.suggestedFix}
-                            </pre>
-                          </div>
-                        </div>
-                      </motion.div>
+                        {isOpen ? 'Hide' : 'Show'}
+                        <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
                     )}
-                  </AnimatePresence>
-                </motion.article>
+                  </div>
+                  {isOpen && (
+                    <div className="mt-4 space-y-4">
+                      {group.items.map((task) => {
+                        const isExpanded = expandedTask === task.id;
+                        return (
+                          <motion.article
+                            key={task.id}
+                            initial={{ opacity: 0, translateY: 8 }}
+                            animate={{ opacity: 1, translateY: 0 }}
+                            exit={{ opacity: 0, translateY: -8 }}
+                            className="rounded-2xl border border-border/70 bg-transparent p-5 transition hover:-translate-y-[2px] hover:bg-panelMuted/40"
+                          >
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <h3 className="text-2xl font-semibold text-text">{task.title}</h3>
+                                  <Badge variant="outline">{task.category}</Badge>
+                                </div>
+                                <p className="mt-3 text-sm text-textMuted">{task.description}</p>
+                                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-textMuted">
+                                  {task.checkType}
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2 text-xs font-mono text-textMuted">
+                                  {task.fileTypes.map((ext) => (
+                                    <span key={ext} className="rounded border border-border/60 px-3 py-1">
+                                      {ext}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                                className="text-sm font-semibold text-accent transition hover:text-accentMuted"
+                              >
+                                {isExpanded ? 'Hide details' : 'View details'}
+                              </button>
+                            </div>
+
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                >
+                                  <div className="mt-6 grid gap-4 rounded-xl border border-border/70 bg-transparent p-5 md:grid-cols-2">
+                                    <div>
+                                      <p className="flex items-center gap-2 text-sm font-semibold text-critical">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        Example violation
+                                      </p>
+                                      <pre className="mt-2 whitespace-pre-wrap font-mono text-[13px] text-textMuted">
+                                        {task.exampleViolation}
+                                      </pre>
+                                    </div>
+                                    <div>
+                                      <p className="flex items-center gap-2 text-sm font-semibold text-success">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Suggested fix
+                                      </p>
+                                      <pre className="mt-2 whitespace-pre-wrap font-mono text-[13px] text-textMuted">
+                                        {task.suggestedFix}
+                                      </pre>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })
           ) : (
