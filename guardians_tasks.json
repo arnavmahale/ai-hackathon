@@ -1,0 +1,146 @@
+[
+  {
+    "id": "task_001",
+    "title": "Enforce JWT validation for API endpoints",
+    "description": "Every API endpoint must verify JWT authentication before processing requests to prevent unauthorized access.",
+    "category": "Security",
+    "severity": "critical",
+    "checkType": "Security Pattern Detection",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.go"
+    ],
+    "exampleViolation": "@app.route('/api/users')\ndef get_users():\n    return users",
+    "suggestedFix": "@app.route('/api/users')\n@require_auth\ndef get_users():\n    return users",
+    "docReference": "Section: API Security in security-guidelines.pdf"
+  },
+  {
+    "id": "task_002",
+    "title": "Ensure all try/catch blocks log errors",
+    "description": "All try/catch blocks must log errors with context. Empty catch blocks are not allowed.",
+    "category": "Error Handling",
+    "severity": "critical",
+    "checkType": "Error Handling Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "try:\n    risky_operation()\nexcept:\n    pass",
+    "suggestedFix": "try:\n    risky_operation()\nexcept Exception as e:\n    logger.error(json.dumps({'error': str(e), 'context': {'user_id': user_id}}))",
+    "docReference": "Section: Error Handling in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_003",
+    "title": "Check for 80% test coverage",
+    "description": "All code must have at least 80% test coverage to ensure reliability and reduce bugs.",
+    "category": "Testing",
+    "severity": "critical",
+    "checkType": "Coverage Check",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "Coverage: 75%",
+    "suggestedFix": "Increase test cases to achieve at least 80% coverage.",
+    "docReference": "Section: Testing Requirements in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_004",
+    "title": "Limit function length to 50 lines",
+    "description": "Functions must not exceed 50 lines to maintain readability and manageability.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Function Length Check",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "def long_function():\n    # 60 lines of code here...",
+    "suggestedFix": "def long_function():\n    # Refactor to smaller functions",
+    "docReference": "Section: Code Quality & Structure in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_005",
+    "title": "Enforce camelCase for function names",
+    "description": "All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Naming Convention Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.ts"
+    ],
+    "exampleViolation": "def get_user_data():\n    pass",
+    "suggestedFix": "def getUserData():\n    pass",
+    "docReference": "Section: Naming Conventions in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_006",
+    "title": "Enforce PascalCase for class names",
+    "description": "All class names must use PascalCase (e.g., UserManager, PaymentProcessor). This ensures clarity and consistency.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Naming Convention Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "class user_manager:\n    pass",
+    "suggestedFix": "class UserManager:\n    pass",
+    "docReference": "Section: Naming Conventions in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_007",
+    "title": "Enforce UPPER_SNAKE_CASE for constants",
+    "description": "All constants must use UPPER_SNAKE_CASE (e.g., MAX_RETRIES, API_SECRET_KEY) to distinguish them from variables.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Naming Convention Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "maxRetries = 5",
+    "suggestedFix": "MAX_RETRIES = 5",
+    "docReference": "Section: Naming Conventions in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_008",
+    "title": "Ensure file names use kebab-case",
+    "description": "All file names must use kebab-case (e.g., user-manager.py, payment-processor.js) for consistency.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "File Naming Convention",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "UserManager.py",
+    "suggestedFix": "user-manager.py",
+    "docReference": "Section: Naming Conventions in acme-code-quality-standards-v2.3.pdf"
+  },
+  {
+    "id": "task_009",
+    "title": "Ensure all functions have docstrings",
+    "description": "Every function must have a docstring that describes its purpose and parameters to improve documentation.",
+    "category": "Documentation",
+    "severity": "info",
+    "checkType": "Docstring Check",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "def my_function():\n    pass",
+    "suggestedFix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass",
+    "docReference": "Section: Documentation Requirements in acme-code-quality-standards-v2.3.pdf"
+  }
+]
