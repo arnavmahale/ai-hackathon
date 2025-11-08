@@ -1,0 +1,72 @@
+❌ ALL_TASKS_MET: False
+Tasks Passed: 1/9
+Passed Task Names: Limit function length to 50 lines
+
+- [Enforce JWT validation for API endpoints] sample_api.py:8:0 — Every API endpoint must verify JWT authentication before processing requests to prevent unauthorized access. (function `get_users` missing auth decorator)
+    Fix:
+    @app.route('/api/users')
+    @require_auth
+    def get_users():
+        return users
+- [Ensure all try/catch blocks log errors] sample_api.py:21:4 — All try/catch blocks must log errors with context. Empty catch blocks are not allowed. (handler missing logger call)
+    Fix:
+    try:
+        risky_operation()
+    except Exception as e:
+        logger.error(json.dumps({'error': str(e), 'context': {'user_id': user_id}}))
+- [Check for 80% test coverage] sample_api.py:1:0 — All code must have at least 80% test coverage to ensure reliability and reduce bugs.
+    Fix:
+    Increase test cases to achieve at least 80% coverage.
+- [Enforce camelCase for function names] sample_api.py:8:0 — All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `get_users`)
+    Fix:
+    Rename to: getUsers
+- [Enforce camelCase for function names] sample_api.py:18:0 — All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `risky_handler`)
+    Fix:
+    Rename to: riskyHandler
+- [Enforce UPPER_SNAKE_CASE for constants] sample_api.py:3:0 — All constants must use UPPER_SNAKE_CASE (e.g., MAX_RETRIES, API_SECRET_KEY) to distinguish them from variables. (found `app`)
+    Fix:
+    MAX_RETRIES = 5
+- [Ensure file names use kebab-case] sample_api.py:1:0 — All file names must use kebab-case (e.g., user-manager.py, payment-processor.js) for consistency. (found `sample_api.py`)
+    Fix:
+    user-manager.py
+- [Ensure all functions have docstrings] sample_api.py:14:0 — Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `getSecureData`)
+    Fix:
+    def my_function():
+        """This function does something."""
+        pass
+- [Ensure all functions have docstrings] sample_api.py:18:0 — Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `risky_handler`)
+    Fix:
+    def my_function():
+        """This function does something."""
+        pass
+- [Check for 80% test coverage] sample_utils.py:1:0 — All code must have at least 80% test coverage to ensure reliability and reduce bugs.
+    Fix:
+    Increase test cases to achieve at least 80% coverage.
+- [Enforce camelCase for function names] sample_utils.py:9:0 — All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `helper_function`)
+    Fix:
+    Rename to: helperFunction
+- [Enforce camelCase for function names] sample_utils.py:5:4 — All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `process_request`)
+    Fix:
+    Rename to: processRequest
+- [Enforce PascalCase for class names] sample_utils.py:1:0 — All class names must use PascalCase (e.g., UserManager, PaymentProcessor). This ensures clarity and consistency. (found `user_manager`)
+    Fix:
+    class UserManager:
+        pass
+- [Ensure file names use kebab-case] sample_utils.py:1:0 — All file names must use kebab-case (e.g., user-manager.py, payment-processor.js) for consistency. (found `sample_utils.py`)
+    Fix:
+    user-manager.py
+- [Ensure all functions have docstrings] sample_utils.py:9:0 — Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `helper_function`)
+    Fix:
+    def my_function():
+        """This function does something."""
+        pass
+- [Ensure all functions have docstrings] sample_utils.py:2:4 — Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `__init__`)
+    Fix:
+    def my_function():
+        """This function does something."""
+        pass
+- [Ensure all functions have docstrings] sample_utils.py:5:4 — Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `process_request`)
+    Fix:
+    def my_function():
+        """This function does something."""
+        pass

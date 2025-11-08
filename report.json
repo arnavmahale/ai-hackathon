@@ -1,0 +1,148 @@
+{
+  "ALL_TASKS_MET": false,
+  "tasks": {
+    "passed": 1,
+    "total": 9,
+    "passed_names": [
+      "Limit function length to 50 lines"
+    ]
+  },
+  "findings": [
+    {
+      "task": "Enforce JWT validation for API endpoints",
+      "file": "sample_api.py",
+      "line": 8,
+      "column": 0,
+      "message": "Every API endpoint must verify JWT authentication before processing requests to prevent unauthorized access. (function `get_users` missing auth decorator)",
+      "fix": "@app.route('/api/users')\n@require_auth\ndef get_users():\n    return users"
+    },
+    {
+      "task": "Ensure all try/catch blocks log errors",
+      "file": "sample_api.py",
+      "line": 21,
+      "column": 4,
+      "message": "All try/catch blocks must log errors with context. Empty catch blocks are not allowed. (handler missing logger call)",
+      "fix": "try:\n    risky_operation()\nexcept Exception as e:\n    logger.error(json.dumps({'error': str(e), 'context': {'user_id': user_id}}))"
+    },
+    {
+      "task": "Check for 80% test coverage",
+      "file": "sample_api.py",
+      "line": 1,
+      "column": 0,
+      "message": "All code must have at least 80% test coverage to ensure reliability and reduce bugs.",
+      "fix": "Increase test cases to achieve at least 80% coverage."
+    },
+    {
+      "task": "Enforce camelCase for function names",
+      "file": "sample_api.py",
+      "line": 8,
+      "column": 0,
+      "message": "All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `get_users`)",
+      "fix": "Rename to: getUsers"
+    },
+    {
+      "task": "Enforce camelCase for function names",
+      "file": "sample_api.py",
+      "line": 18,
+      "column": 0,
+      "message": "All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `risky_handler`)",
+      "fix": "Rename to: riskyHandler"
+    },
+    {
+      "task": "Enforce UPPER_SNAKE_CASE for constants",
+      "file": "sample_api.py",
+      "line": 3,
+      "column": 0,
+      "message": "All constants must use UPPER_SNAKE_CASE (e.g., MAX_RETRIES, API_SECRET_KEY) to distinguish them from variables. (found `app`)",
+      "fix": "MAX_RETRIES = 5"
+    },
+    {
+      "task": "Ensure file names use kebab-case",
+      "file": "sample_api.py",
+      "line": 1,
+      "column": 0,
+      "message": "All file names must use kebab-case (e.g., user-manager.py, payment-processor.js) for consistency. (found `sample_api.py`)",
+      "fix": "user-manager.py"
+    },
+    {
+      "task": "Ensure all functions have docstrings",
+      "file": "sample_api.py",
+      "line": 14,
+      "column": 0,
+      "message": "Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `getSecureData`)",
+      "fix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass"
+    },
+    {
+      "task": "Ensure all functions have docstrings",
+      "file": "sample_api.py",
+      "line": 18,
+      "column": 0,
+      "message": "Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `risky_handler`)",
+      "fix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass"
+    },
+    {
+      "task": "Check for 80% test coverage",
+      "file": "sample_utils.py",
+      "line": 1,
+      "column": 0,
+      "message": "All code must have at least 80% test coverage to ensure reliability and reduce bugs.",
+      "fix": "Increase test cases to achieve at least 80% coverage."
+    },
+    {
+      "task": "Enforce camelCase for function names",
+      "file": "sample_utils.py",
+      "line": 9,
+      "column": 0,
+      "message": "All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `helper_function`)",
+      "fix": "Rename to: helperFunction"
+    },
+    {
+      "task": "Enforce camelCase for function names",
+      "file": "sample_utils.py",
+      "line": 5,
+      "column": 4,
+      "message": "All function names must use camelCase (e.g., getUserData, calculateTotal). This improves code consistency and readability. (found `process_request`)",
+      "fix": "Rename to: processRequest"
+    },
+    {
+      "task": "Enforce PascalCase for class names",
+      "file": "sample_utils.py",
+      "line": 1,
+      "column": 0,
+      "message": "All class names must use PascalCase (e.g., UserManager, PaymentProcessor). This ensures clarity and consistency. (found `user_manager`)",
+      "fix": "class UserManager:\n    pass"
+    },
+    {
+      "task": "Ensure file names use kebab-case",
+      "file": "sample_utils.py",
+      "line": 1,
+      "column": 0,
+      "message": "All file names must use kebab-case (e.g., user-manager.py, payment-processor.js) for consistency. (found `sample_utils.py`)",
+      "fix": "user-manager.py"
+    },
+    {
+      "task": "Ensure all functions have docstrings",
+      "file": "sample_utils.py",
+      "line": 9,
+      "column": 0,
+      "message": "Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `helper_function`)",
+      "fix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass"
+    },
+    {
+      "task": "Ensure all functions have docstrings",
+      "file": "sample_utils.py",
+      "line": 2,
+      "column": 4,
+      "message": "Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `__init__`)",
+      "fix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass"
+    },
+    {
+      "task": "Ensure all functions have docstrings",
+      "file": "sample_utils.py",
+      "line": 5,
+      "column": 4,
+      "message": "Every function must have a docstring that describes its purpose and parameters to improve documentation. (function `process_request`)",
+      "fix": "def my_function():\n    \"\"\"This function does something.\"\"\"\n    pass"
+    }
+  ]
+}
