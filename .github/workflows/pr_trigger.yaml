@@ -95,13 +95,3 @@ jobs:
           name: pr-${{ steps.meta.outputs.pr_number }}-${{ steps.meta.outputs.head_sha }}
           path: agent-payload
           retention-days: 30
-
-      # Comment with artifact name
-      - name: Comment with artifact pointer
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.number }}
-          body: |
-            🛡️ **Guardians of the Code** captured PR data as an artifact.
-            Name: `pr-${{ steps.meta.outputs.pr_number }}-${{ steps.meta.outputs.head_sha }}`
-            Find it in the workflow **Artifacts** section.
