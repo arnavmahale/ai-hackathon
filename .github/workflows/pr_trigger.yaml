@@ -1,0 +1,105 @@
+name: Start Agent Analysis
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # for optional comment; remove if not needed
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Collect PR identifiers
+      - name: Collect PR metadata
+        id: meta
+        shell: bash
+        run: |
+          echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo "pr_number=${{ github.event.number }}" >> $GITHUB_OUTPUT
+          echo "base_branch=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          echo "head_branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+          echo "base_sha=${{ github.event.pull_request.base.sha }}" >> $GITHUB_OUTPUT
+          echo "head_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+          echo "diff_url=${{ github.event.pull_request.diff_url }}" >> $GITHUB_OUTPUT
+          echo "patch_url=${{ github.event.pull_request.patch_url }}" >> $GITHUB_OUTPUT
+
+      # List changed files
+      - name: Get list of changed files
+        id: diff
+        shell: bash
+        run: |
+          base="${{ steps.meta.outputs.base_sha }}"
+          head="${{ steps.meta.outputs.head_sha }}"
+          git diff --name-only "$base" "$head" > changed_files.txt
+          files=$(tr '\n' ',' < changed_files.txt | sed 's/,$//')
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      # Build payload folder on the runner
+      - name: Build payload folder
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          PR="${{ steps.meta.outputs.pr_number }}"
+          HEAD="${{ steps.meta.outputs.head_sha }}"
+          OUTDIR="agent-payload/pr-${PR}-${HEAD}"
+          mkdir -p "$OUTDIR"
+
+          # Raw diff & patch
+          curl -sSL -H "Authorization: Bearer $GH_TOKEN" "${{ steps.meta.outputs.diff_url }}"  -o "$OUTDIR/pr.diff"
+          curl -sSL -H "Authorization: Bearer $GH_TOKEN" "${{ steps.meta.outputs.patch_url }}" -o "$OUTDIR/pr.patch"
+
+          # Per-file patches JSON
+          curl -sSL -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ steps.meta.outputs.repo }}/pulls/${PR}/files?per_page=300" \
+            -o "$OUTDIR/files.json"
+
+          # Minimal metadata JSON
+          jq -n \
+            --arg repo        "${{ steps.meta.outputs.repo }}" \
+            --arg pr_number   "${PR}" \
+            --arg base_branch "${{ steps.meta.outputs.base_branch }}" \
+            --arg head_branch "${{ steps.meta.outputs.head_branch }}" \
+            --arg base_sha    "${{ steps.meta.outputs.base_sha }}" \
+            --arg head_sha    "${HEAD}" \
+            --arg changed     "${{ steps.diff.outputs.files }}" \
+            --arg diff_url    "${{ steps.meta.outputs.diff_url }}" \
+            --arg patch_url   "${{ steps.meta.outputs.patch_url }}" \
+            '{repo:$repo, pr_number:$pr_number, base_branch:$base_branch, head_branch:$head_branch,
+              base_sha:$base_sha, head_sha:$head_sha, changed_files_csv:$changed,
+              diff_url:$diff_url, patch_url:$patch_url}' \
+            > "$OUTDIR/meta.json"
+
+          # (Optional) save current contents of changed files at head
+          mkdir -p "$OUTDIR/files"
+          while IFS= read -r f; do
+            if [ -f "$f" ]; then
+              mkdir -p "$OUTDIR/files/$(dirname "$f")"
+              cp --parents "$f" "$OUTDIR" 2>/dev/null || true
+            fi
+          done < changed_files.txt
+
+      # Upload as an artifact
+      - name: Upload PR payload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ steps.meta.outputs.pr_number }}-${{ steps.meta.outputs.head_sha }}
+          path: agent-payload
+          retention-days: 30
+
+      # Comment with artifact name
+      - name: Comment with artifact pointer
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.number }}
+          body: |
+            🛡️ **Guardians of the Code** captured PR data as an artifact.
+            Name: `pr-${{ steps.meta.outputs.pr_number }}-${{ steps.meta.outputs.head_sha }}`
+            Find it in the workflow **Artifacts** section.
