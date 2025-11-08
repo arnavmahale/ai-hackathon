@@ -2,8 +2,6 @@ name: Start Agent Analysis
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  workflow_dispatch:
-    {}
 
 jobs:
   analyze:
