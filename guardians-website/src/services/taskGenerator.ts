@@ -1,6 +1,5 @@
 import axios from 'axios';
 import type { Task } from '../types';
-import { readFileAsText } from './documentParser';
 import { MOCK_TASKS } from './mockData';
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
@@ -35,7 +34,7 @@ For each standard, create ONE task that is:
 ✓ COMPLETE: Includes bad example AND good example
 
 STEP 3: Return ONLY Valid JSON
-Return exactly this format as a JSON array. No markdown, no explanations:
+Return exactly this format as a JSON array. Note: This is just an example. You need to find tasks given the document. No markdown, no explanations:
 [
   {
     "id": "task_001",
@@ -116,12 +115,7 @@ export async function generateTasksFromDocuments(files: File[]): Promise<Task[]>
 
   const serialized = await Promise.all(
     files.map(async (file) => {
-      const content = await readFileAsText(file);
-      debugLog('Including file in prompt:', {
-        name: file.name,
-        size: file.size,
-        preview: content.slice(0, 200),
-      });
+      const content = await file.text();
       return `### ${file.name}\n${content}`;
     }),
   );
