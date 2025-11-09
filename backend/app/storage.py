@@ -64,6 +64,8 @@ def load_pull_requests() -> List[PullRequestSummary]:
                 lines_added=row.lines_added,
                 lines_removed=row.lines_removed,
                 last_run=row.run_completed_at,
+                summary=row.summary,
+                result=row.violations or [],
             )
             for row in rows
         ]
@@ -141,6 +143,8 @@ def upsert_scan_result(record: PullRequestRecord) -> PullRequestSummary:
             lines_added=row.lines_added,
             lines_removed=row.lines_removed,
             last_run=row.run_completed_at,
+            summary=row.summary,
+            result=row.violations or [],
         )
 
 

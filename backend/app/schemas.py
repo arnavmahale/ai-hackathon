@@ -61,6 +61,8 @@ class PullRequestSummary(BaseModel):
     lines_added: int = Field(alias="linesAdded")
     lines_removed: int = Field(alias="linesRemoved")
     last_run: Optional[datetime] = Field(default=None, alias="lastRun")
+    summary: Optional[str] = None
+    result: List[dict] = Field(default_factory=list)
 
 
 class PullRequestRecord(PullRequestSummary):
@@ -113,8 +115,7 @@ class PullRequestListResponse(BaseModel):
 
 
 class PullRequestDetail(PullRequestRecord):
-    result: List[dict] = Field(default_factory=list)
-    summary: Optional[str] = None
+    pass
 
 
 class AgentViolation(BaseModel):
