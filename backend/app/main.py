@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
+import html
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import API_TOKEN, ensure_directories
@@ -105,6 +107,65 @@ def get_agent_results(pr_id: str):
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Results not found")
     return record
+
+
+@app.get("/debug/pull-requests", response_class=HTMLResponse)
+def debug_pull_requests():
+    prs = storage.load_pull_requests()
+    rows = []
+    for pr in prs:
+        rows.append(
+            f"<tr>"
+            f"<td>{html.escape(pr.id)}</td>"
+            f"<td>{html.escape(pr.repository)}</td>"
+            f"<td>{pr.number}</td>"
+            f"<td>{html.escape(pr.status)}</td>"
+            f"<td>{pr.files_changed}</td>"
+            f"<td>{pr.violations}</td>"
+            f"<td>{pr.lines_added}</td>"
+            f"<td>{pr.lines_removed}</td>"
+            f"<td>{html.escape(pr.last_run.isoformat() if pr.last_run else '—')}</td>"
+            f"</tr>"
+        )
+    rows_html = "\n".join(rows) or "<tr><td colspan='9'>No pull requests ingested yet.</td></tr>"
+    html_body = f"""
+    <html>
+      <head>
+        <title>Guardians PR Debug</title>
+        <style>
+          body {{ font-family: Arial, sans-serif; padding: 2rem; background: #0b1120; color: #e2e8f0; }}
+          table {{ border-collapse: collapse; width: 100%; }}
+          th, td {{ border: 1px solid #1e293b; padding: 0.5rem; text-align: left; }}
+          th {{ background: #1e293b; }}
+          tr:nth-child(even) {{ background: #111827; }}
+          a {{ color: #38bdf8; }}
+        </style>
+      </head>
+      <body>
+        <h1>Pull Request Ingest Debug</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Repository</th>
+              <th>#</th>
+              <th>Status</th>
+              <th>Files Changed</th>
+              <th>Violations</th>
+              <th>Lines Added</th>
+              <th>Lines Removed</th>
+              <th>Last Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows_html}
+          </tbody>
+        </table>
+        <p>Data source: /pull-requests</p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html_body)
 
 @app.post("/github/webhook", status_code=status.HTTP_202_ACCEPTED)
 async def github_webhook(
