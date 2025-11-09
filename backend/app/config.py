@@ -11,6 +11,7 @@ RUNS_DIR = DATA_DIR / "runs"
 API_TOKEN = os.getenv("GUARDIANS_API_TOKEN")
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", API_TOKEN)
 GITHUB_ACCESS_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'guardians.db'}")
 
 
 def ensure_directories() -> None:

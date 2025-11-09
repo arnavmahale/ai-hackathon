@@ -35,9 +35,11 @@ class TaskIngestRequest(BaseModel):
 
 
 class TaskMetadata(BaseModel):
-    task_set_id: str
-    created_at: datetime
-    task_count: int
+    model_config = ConfigDict(populate_by_name=True)
+
+    task_set_id: str = Field(alias="taskSetId")
+    created_at: datetime = Field(alias="createdAt")
+    task_count: int = Field(alias="taskCount")
     path: str
 
 

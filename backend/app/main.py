@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import API_TOKEN, ensure_directories
+from .database import init_db
 from .security import verify_github_signature
 from .github_client import fetch_pull_request_files
 from .schemas import (
@@ -21,6 +22,7 @@ from .schemas import (
 from . import storage
 
 ensure_directories()
+init_db()
 
 app = FastAPI(title="Guardians API", version="0.1.0")
 app.add_middleware(

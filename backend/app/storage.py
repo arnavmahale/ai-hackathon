@@ -1,140 +1,178 @@
 from __future__ import annotations
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
+from sqlmodel import select
 
-from .config import TASKS_DIR, PRS_DIR, RUNS_DIR
-from .schemas import (
-    Task,
-    TaskMetadata,
-    PullRequestSummary,
-    PullRequestRecord,
-    AgentRunRecord,
-)
-
-TASK_INDEX_FILE = TASKS_DIR / "index.json"
-PR_INDEX_FILE = PRS_DIR / "pull_requests.json"
-
-
-def _read_json(path: Path, default):
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return default
-
-
-def _write_json(path: Path, payload) -> None:
-    path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+from .database import get_session
+from .models import TaskSet, PullRequest, AgentRun
+from .schemas import Task, TaskMetadata, PullRequestSummary, PullRequestRecord, AgentRunRecord, AgentViolation
 
 
 def save_task_set(tasks: List[Task]) -> TaskMetadata:
-    timestamp = datetime.now(timezone.utc).isoformat().replace(":", "-")
-    task_set_id = f"taskset-{timestamp}"
-    file_path = TASKS_DIR / f"{task_set_id}.json"
+    now = datetime.now(timezone.utc)
+    task_set_id = f"taskset-{now.isoformat().replace(":", "-")}"
     payload = [task.as_payload() for task in tasks]
-    _write_json(file_path, payload)
-
-    metadata = {
-        "task_set_id": task_set_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "task_count": len(tasks),
-        "path": str(file_path.relative_to(TASKS_DIR.parent)),
-    }
-
-    index = _read_json(TASK_INDEX_FILE, [])
-    index.append(metadata)
-    _write_json(TASK_INDEX_FILE, index)
-
-    return TaskMetadata(**metadata)
-
-
-def get_latest_task_metadata() -> Optional[TaskMetadata]:
-    index = _read_json(TASK_INDEX_FILE, [])
-    if not index:
-        return None
-    latest = max(index, key=lambda item: item["created_at"])
-    return TaskMetadata(**latest)
-
-
-def load_tasks_from_metadata(meta: TaskMetadata) -> List[dict]:
-    file_path = TASKS_DIR.parent / meta.path
-    if not file_path.exists():
-        raise FileNotFoundError(file_path)
-    return json.loads(file_path.read_text(encoding="utf-8"))
+    with get_session() as session:
+        entry = TaskSet(task_set_id=task_set_id, created_at=now, task_count=len(payload), tasks=payload)
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+    return TaskMetadata(task_set_id=task_set_id, created_at=entry.created_at, task_count=entry.task_count, path=f"taskset://{task_set_id}")
 
 
 def load_latest_tasks_payload() -> Optional[dict]:
-    meta = get_latest_task_metadata()
-    if not meta:
-        return None
-    return {
-        "metadata": meta,
-        "tasks": load_tasks_from_metadata(meta),
-    }
+    with get_session() as session:
+        statement = select(TaskSet).order_by(TaskSet.created_at.desc()).limit(1)
+        result = session.exec(statement).first()
+        if not result:
+            return None
+        metadata = TaskMetadata(task_set_id=result.task_set_id, created_at=result.created_at, task_count=result.task_count, path=f"taskset://{result.task_set_id}")
+        return {"metadata": metadata, "tasks": result.tasks}
 
 
 def load_pull_requests() -> List[PullRequestSummary]:
-    items = _read_json(PR_INDEX_FILE, [])
-    return [PullRequestSummary(**item) for item in items]
+    with get_session() as session:
+        prs = session.exec(select(PullRequest)).all()
+        return [
+            PullRequestSummary(
+                id=pr.id,
+                number=pr.number,
+                title=pr.title,
+                repository=pr.repository,
+                author=pr.author,
+                status=pr.status,
+                files_changed=pr.files_changed,
+                violations=pr.violations,
+                lines_added=pr.lines_added,
+                lines_removed=pr.lines_removed,
+                last_run=pr.last_run,
+            )
+            for pr in prs
+        ]
 
 
 def load_pull_request_record(pr_id: str) -> Optional[PullRequestRecord]:
-    items = _read_json(PR_INDEX_FILE, [])
-    for item in items:
-        if item.get("id") == pr_id:
-            return PullRequestRecord(**item)
-    return None
+    with get_session() as session:
+        pr = session.get(PullRequest, pr_id)
+        if not pr:
+            return None
+        return PullRequestRecord(
+            id=pr.id,
+            number=pr.number,
+            title=pr.title,
+            repository=pr.repository,
+            author=pr.author,
+            status=pr.status,
+            files_changed=pr.files_changed,
+            violations=pr.violations,
+            lines_added=pr.lines_added,
+            lines_removed=pr.lines_removed,
+            base_branch=pr.base_branch,
+            head_branch=pr.head_branch,
+            changed_files=pr.changed_files,
+            last_run=pr.last_run,
+        )
 
 
 def upsert_pull_request(record: PullRequestRecord) -> PullRequestSummary:
-    items = _read_json(PR_INDEX_FILE, [])
-    payload = record.model_dump(by_alias=True)
-    updated = False
-    for idx, existing in enumerate(items):
-        if existing.get("id") == record.id:
-            items[idx] = payload
-            updated = True
-            break
-    if not updated:
-        items.append(payload)
-    _write_json(PR_INDEX_FILE, items)
-    return PullRequestSummary(**payload)
+    with get_session() as session:
+        pr = session.get(PullRequest, record.id)
+        if not pr:
+            pr = PullRequest(
+                id=record.id,
+                repository=record.repository,
+                number=record.number,
+                title=record.title,
+                author=record.author,
+                status=record.status,
+                files_changed=record.files_changed,
+                violations=record.violations,
+                lines_added=record.lines_added,
+                lines_removed=record.lines_removed,
+                base_branch=record.base_branch,
+                head_branch=record.head_branch,
+                changed_files=record.changed_files,
+                last_run=record.last_run,
+            )
+            session.add(pr)
+        else:
+            pr.repository = record.repository
+            pr.number = record.number
+            pr.title = record.title
+            pr.author = record.author
+            pr.status = record.status
+            pr.files_changed = record.files_changed
+            pr.violations = record.violations
+            pr.lines_added = record.lines_added
+            pr.lines_removed = record.lines_removed
+            pr.base_branch = record.base_branch
+            pr.head_branch = record.head_branch
+            pr.changed_files = record.changed_files
+            pr.last_run = record.last_run
+        session.commit()
+        session.refresh(pr)
+        return PullRequestSummary(
+            id=pr.id,
+            number=pr.number,
+            title=pr.title,
+            repository=pr.repository,
+            author=pr.author,
+            status=pr.status,
+            files_changed=pr.files_changed,
+            violations=pr.violations,
+            lines_added=pr.lines_added,
+            lines_removed=pr.lines_removed,
+            last_run=pr.last_run,
+        )
 
 
 def save_agent_run(record: AgentRunRecord) -> None:
-    payload = record.model_dump(by_alias=True)
-    run_path = RUNS_DIR / f"{record.run_id}.json"
-    _write_json(run_path, payload)
-    latest_path = RUNS_DIR / f"{record.pull_request_id}-latest.json"
-    _write_json(latest_path, payload)
-    _update_pull_request_from_run(record)
+    with get_session() as session:
+        entry = AgentRun(
+            run_id=record.run_id,
+            pull_request_id=record.pull_request_id,
+            status=record.status,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            task_count=record.task_count,
+            source=record.source,
+            notes=record.notes,
+            violations=[
+                violation.model_dump(by_alias=True) if isinstance(violation, AgentViolation) else violation
+                for violation in record.violations
+            ],
+        )
+        session.merge(entry)
+        pr = session.get(PullRequest, record.pull_request_id)
+        if pr:
+            pr.status = _map_run_status(record.status)
+            pr.violations = len(record.violations)
+            pr.last_run = record.completed_at or record.started_at
+        session.commit()
 
 
 def load_agent_run(pr_id: str) -> Optional[AgentRunRecord]:
-    latest_path = RUNS_DIR / f"{pr_id}-latest.json"
-    if not latest_path.exists():
-        return None
-    payload = json.loads(latest_path.read_text(encoding="utf-8"))
-    return AgentRunRecord(**payload)
-
-
-def _update_pull_request_from_run(record: AgentRunRecord) -> None:
-    items = _read_json(PR_INDEX_FILE, [])
-    changed = False
-    mapped_status = _map_run_status(record.status)
-    last_run_time = (record.completed_at or record.started_at).isoformat()
-    for entry in items:
-        if entry.get("id") == record.pull_request_id:
-            entry["status"] = mapped_status
-            entry["violations"] = len(record.violations)
-            entry["lastRun"] = last_run_time
-            changed = True
-            break
-    if changed:
-        _write_json(PR_INDEX_FILE, items)
+    with get_session() as session:
+        run = (
+            session.exec(
+                select(AgentRun)
+                .where(AgentRun.pull_request_id == pr_id)
+                .order_by(AgentRun.started_at.desc())
+            ).first()
+        )
+        if not run:
+            return None
+        return AgentRunRecord(
+            run_id=run.run_id,
+            pull_request_id=run.pull_request_id,
+            status=run.status,
+            started_at=run.started_at,
+            completed_at=run.completed_at,
+            task_count=run.task_count,
+            source=run.source,
+            notes=run.notes,
+            violations=run.violations,
+        )
 
 
 def _map_run_status(run_status: str) -> str:

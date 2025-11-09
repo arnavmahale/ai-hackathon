@@ -18,8 +18,9 @@ Optional environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `GUARDIANS_DATA_DIR` | Custom path for persisted JSON (defaults to `backend/data/`). |
+| `GUARDIANS_DATA_DIR` | Base folder for data files (default `backend/data/`). |
 | `GUARDIANS_API_TOKEN` | If set, write endpoints require `Authorization: Bearer <token>`. |
+| `DATABASE_URL` | SQL database connection string (defaults to `sqlite:///backend/data/guardians.db`). |
 | `GITHUB_WEBHOOK_SECRET` | Secret for verifying GitHub webhook signatures (falls back to `GUARDIANS_API_TOKEN`). |
 | `GITHUB_ACCESS_TOKEN` | PAT/installation token used to call GitHub’s REST API for PR files. |
 
@@ -62,7 +63,7 @@ If you prefer direct webhooks, deploy the FastAPI service (e.g., Render) and add
 
 The `/github/webhook` route only processes `opened`, `reopened`, or `synchronize` actions, verifies the signature, and stores the PR data just like the Action step. Use ngrok for local testing if needed (`ngrok http 8000` then register the HTTPS URL as the payload endpoint).
 
-To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes and stores the filenames alongside each PR record.
+To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes and stores the filenames alongside each PR record. All webhook/persistence data now live in the SQLite database specified by `DATABASE_URL`, so you can inspect it with `sqlite3 backend/data/guardians.db` (or any GUI) instead of scraping JSON files.
 
 ### Running the validator
 
