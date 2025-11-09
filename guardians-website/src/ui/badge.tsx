@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from 'react';
-import { cn } from '../lib/utils.ts';
+import { cn } from '../lib/utils';
 import type { TaskSeverity } from '../types';
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
