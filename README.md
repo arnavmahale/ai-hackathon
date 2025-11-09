@@ -66,7 +66,7 @@ The `/github/webhook` route only processes `opened`, `reopened`, or `synchronize
 To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes, immediately enriches the payload, and stores only the **final scan record** (metadata + violations) in the database specified by `DATABASE_URL`. You can inspect the consolidated records via:
 
 - `GET /pull-requests` (JSON)
-- `GET /pull-requests/{repo}#PR-{number}`
+- `GET /pull-requests/{repo}#PR-{number}` (if calling manually, encode the `#` as `%23`; slashes are now handled by the route)
 - `GET /debug/pull-requests` (HTML table)
 
 Because we persist only the finished scan rows (or pending placeholders), you never have to read intermediate JSON files—everything lives in the SQL database (Postgres on Render or SQLite locally).

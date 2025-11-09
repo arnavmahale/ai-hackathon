@@ -86,7 +86,7 @@ def ingest_pull_request(payload: PullRequestIngestRequest, _: None = Depends(req
     return summary
 
 
-@app.get("/pull-requests/{pr_id}", response_model=PullRequestDetail)
+@app.get("/pull-requests/{pr_id:path}", response_model=PullRequestDetail)
 def get_pull_request(pr_id: str):
     record = storage.load_pull_request_record(pr_id)
     if not record:
@@ -101,7 +101,7 @@ def ingest_agent_run(payload: AgentRunIngestRequest, _: None = Depends(require_t
     return record
 
 
-@app.get("/agent-results/{pr_id}", response_model=AgentRunRecord)
+@app.get("/agent-results/{pr_id:path}", response_model=AgentRunRecord)
 def get_agent_results(pr_id: str):
     record = storage.load_scan_result(pr_id)
     if not record:
