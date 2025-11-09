@@ -73,6 +73,17 @@ Because we persist only the finished scan rows (or pending placeholders), you ne
 
 > **Breaking change:** If you were using the previous `pullrequest`/`agentrun` tables, drop/recreate the database (or start a new one). The schema now centers on a single `scanresult` table that stores both the PR metadata and the latest agent findings.
 
+### Automated agent runner
+
+Whenever the webhook stores a PR, the backend immediately launches an async worker that:
+
+1. Fetches the latest task set (`/tasks/current`)
+2. Downloads the changed files from GitHub (using `GITHUB_ACCESS_TOKEN`)
+3. Executes `validate_code.py` in JSON mode
+4. Saves the summary/violations via `/agent-runs`
+
+The current status is visible at `/pull-requests`, `/pull-requests/{repo}#PR-{number}`, or `/debug/pull-requests`. If you need to re-trigger a scan, just push new commits (or redeliver the webhook) and the runner will process the PR again.
+
 ### Running the validator
 
 ```bash

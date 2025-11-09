@@ -22,6 +22,7 @@ from .schemas import (
     AgentRunRecord,
 )
 from . import storage
+from .runner import enqueue_scan
 
 ensure_directories()
 init_db()
@@ -201,5 +202,6 @@ async def github_webhook(
         lines_removed=pr.get("deletions", 0),
         changed_files=changed_files,
     )
-    storage.upsert_scan_result(pr_payload.to_record())
+    summary = storage.upsert_scan_result(pr_payload.to_record())
+    enqueue_scan(summary.id)
     return {"status": "accepted"}
