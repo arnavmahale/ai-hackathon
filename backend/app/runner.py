@@ -140,7 +140,7 @@ def _save_runner_result(pr_id: str, violations: List[AgentViolation], passed: bo
     end = datetime.now(timezone.utc)
     notes = "All tasks passed." if passed else f"Detected {len(violations)} violation(s)."
     request = AgentRunIngestRequest(
-        pull_request_id=pr_id,
+        pullRequestId=pr_id,
         status=status,
         started_at=start,
         completed_at=end,
