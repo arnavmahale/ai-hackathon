@@ -55,20 +55,16 @@ jobs:
           OUTDIR="agent-payload/pr-${PR}-${HEAD}"
           mkdir -p "$OUTDIR"
 
-          # Raw diff only (removed pr.patch)
           curl -sSL -H "Authorization: Bearer $GH_TOKEN" \
             "${{ steps.meta.outputs.diff_url }}" \
             -o "$OUTDIR/pr.diff"
 
-          # Per-file patches JSON
           curl -sSL -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/${{ steps.meta.outputs.repo }}/pulls/${PR}/files?per_page=300" \
             -o "$OUTDIR/files.json"
 
-          # Author info
           AUTHOR="${{ github.event.pull_request.user.login }}"
 
-          # Minimal metadata JSON (now includes 'author')
           jq -n \
             --arg repo        "${{ steps.meta.outputs.repo }}" \
             --arg pr_number   "${PR}" \
@@ -85,7 +81,6 @@ jobs:
               changed_files_csv:$changed, diff_url:$diff_url}' \
             > "$OUTDIR/meta.json"
 
-          # Save current contents of changed files at head
           mkdir -p "$OUTDIR/files"
           while IFS= read -r f; do
             if [ -f "$f" ]; then
