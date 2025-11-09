@@ -123,12 +123,12 @@ def _build_violations(findings: List[dict], tasks: List[dict], path_map: Dict[st
         rel_path = path_map.get(temp_path, temp_path)
         violations.append(
             AgentViolation(
-                task_id=task_id,
+                taskId=task_id,
                 message=finding.get("message", "Task violation detected."),
                 file=rel_path,
                 line=int(finding.get("line", 1)),
                 severity=severity,
-                suggested_fix=finding.get("fix"),
+                suggestedFix=finding.get("fix"),
             )
         )
     return violations
