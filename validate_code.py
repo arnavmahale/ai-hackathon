@@ -315,7 +315,10 @@ def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path) ->
     global_excludes = tasks_cfg.get("exclude")
 
     def included(p: Path) -> bool:
-        rel = p.resolve().relative_to(repo_root.resolve()).as_posix()
+        try:
+            rel = p.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            rel = p.resolve().as_posix()
         if global_includes and not any(fnmatch.fnmatch(rel, pat) for pat in global_includes):
             return False
         if global_excludes and any(fnmatch.fnmatch(rel, pat) for pat in global_excludes):
