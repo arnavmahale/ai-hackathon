@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    env:
+      GUARDIANS_API_URL: ${{ secrets.GUARDIANS_API_URL }}
+      GUARDIANS_API_TOKEN: ${{ secrets.GUARDIANS_API_TOKEN }}
 
     steps:
       - name: Checkout PR code
@@ -87,6 +90,54 @@ jobs:
               cp --parents "$f" "$OUTDIR" 2>/dev/null || true
             fi
           done < changed_files.txt
+
+      - name: Notify Guardians backend
+        if: env.GUARDIANS_API_URL != ''
+        shell: bash
+        env:
+          API_URL: ${{ env.GUARDIANS_API_URL }}
+          API_TOKEN: ${{ env.GUARDIANS_API_TOKEN }}
+        run: |
+          CHANGED_JSON=$(jq -R -s 'split("\n") | map(select(length>0))' changed_files.txt)
+          PAYLOAD=$(jq -n \
+            --arg repo "${{ steps.meta.outputs.repo }}" \
+            --argjson pr_number ${{ steps.meta.outputs.pr_number }} \
+            --arg title "${{ github.event.pull_request.title }}" \
+            --arg author "${{ github.event.pull_request.user.login }}" \
+            --arg baseBranch "${{ steps.meta.outputs.base_branch }}" \
+            --arg headBranch "${{ steps.meta.outputs.head_branch }}" \
+            --argjson filesChanged ${{ github.event.pull_request.changed_files }} \
+            --argjson linesAdded ${{ github.event.pull_request.additions }} \
+            --argjson linesRemoved ${{ github.event.pull_request.deletions }} \
+            --argjson changedFiles "$CHANGED_JSON" \
+            '{
+              repo: $repo,
+              pr_number: $pr_number,
+              title: $title,
+              author: $author,
+              baseBranch: $baseBranch,
+              headBranch: $headBranch,
+              filesChanged: $filesChanged,
+              linesAdded: $linesAdded,
+              linesRemoved: $linesRemoved,
+              changedFiles: $changedFiles
+            }')
+
+          if [ -z "$API_URL" ]; then
+            echo "API_URL not set, skipping notification."
+            exit 0
+          fi
+
+          if [ -n "$API_TOKEN" ]; then
+            AUTH_HEADER=(-H "Authorization: Bearer $API_TOKEN")
+          else
+            AUTH_HEADER=()
+          fi
+
+          curl -sS -X POST "$API_URL/pull-requests" \
+            -H "Content-Type: application/json" \
+            "${AUTH_HEADER[@]}" \
+            -d "$PAYLOAD"
 
       # Upload as an artifact
       - name: Upload PR payload artifact

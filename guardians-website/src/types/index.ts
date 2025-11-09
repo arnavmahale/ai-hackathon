@@ -89,3 +89,10 @@ export interface AgentRunState {
   completedAt?: string;
   summary?: AgentRunSummary;
 }
+
+export interface TaskSetMetadata {
+  taskSetId: string;
+  createdAt: string;
+  taskCount: number;
+  path: string;
+}

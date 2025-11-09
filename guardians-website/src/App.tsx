@@ -10,10 +10,12 @@ import type {
   GenerationState,
   PageKey,
   PullRequest,
+  Task,
+  TaskSetMetadata,
   UploadedFile,
 } from './types';
 import { generateTasksFromDocuments } from './services/taskGenerator';
-import { fetchPullRequests } from './services/apiService';
+import { fetchLatestTaskSet, fetchPullRequests, saveTaskSet } from './services/apiService';
 import { MOCK_PRS, MOCK_TASKS } from './services/mockData';
 
 const initialState: AppState = {
@@ -47,6 +49,7 @@ function App() {
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [agentRuns, setAgentRuns] = useState<Record<string, AgentRunState>>({});
+  const [taskSetMetadata, setTaskSetMetadata] = useState<TaskSetMetadata | null>(null);
   const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const ensureAgentRuns = (prs: PullRequest[]) => {
@@ -64,6 +67,7 @@ function App() {
   };
 
   useEffect(() => {
+    void hydrateTasks();
     fetchPullRequests()
       .then((prs) => {
         setState((prev) => ({
@@ -185,6 +189,24 @@ function App() {
     setState((prev) => ({ ...prev, currentPage: page }));
   };
 
+  const syncTasksToBackend = async (tasks: Task[]) => {
+    const metadata = await saveTaskSet(tasks);
+    if (metadata) {
+      setTaskSetMetadata(metadata);
+    }
+  };
+
+  const hydrateTasks = async () => {
+    const latest = await fetchLatestTaskSet();
+    if (latest) {
+      setState((prev) => ({
+        ...prev,
+        tasks: latest.tasks,
+      }));
+      setTaskSetMetadata(latest.metadata);
+    }
+  };
+
   const handleGenerateTasks = async () => {
     if (generationState.isRunning) return;
     const files = state.uploadedFiles
@@ -221,6 +243,8 @@ function App() {
       totalFiles: files.length,
     });
     setShowSuccess(true);
+
+    void syncTasksToBackend(tasks);
   };
 
   const handleRefreshTasks = () => {

@@ -1,0 +1,124 @@
+[
+  {
+    "id": "task_001",
+    "title": "Enforce snake_case for variable names",
+    "description": "All variable names must use snake_case (e.g., user_data, total_amount). This improves code consistency and readability.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Naming Convention Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.ts"
+    ],
+    "exampleViolation": "userData = 5",
+    "suggestedFix": "user_data = 5",
+    "docReference": "Section: Naming Conventions in style-guide.md"
+  },
+  {
+    "id": "task_002",
+    "title": "All classes must use PascalCase",
+    "description": "All class names must use PascalCase (e.g., UserProfile, OrderDetails). This ensures clarity in class definitions.",
+    "category": "Code Quality",
+    "severity": "warning",
+    "checkType": "Naming Convention Pattern",
+    "fileTypes": [
+      "*.py",
+      "*.js",
+      "*.java"
+    ],
+    "exampleViolation": "class userProfile:\n    pass",
+    "suggestedFix": "class UserProfile:\n    pass",
+    "docReference": "Section: Naming Conventions in style-guide.md"
+  },
+  {
+    "id": "task_003",
+    "title": "Implement error handling for all API endpoints",
+    "description": "Every API endpoint must include error handling to manage exceptions and return appropriate HTTP status codes.",
+    "category": "Error Handling",
+    "severity": "critical",
+    "checkType": "Error Handling Pattern Detection",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "def get_users():\n    return users",
+    "suggestedFix": "def get_users():\n    try:\n        return users\n    except Exception as e:\n        return {'error': str(e)}, 500",
+    "docReference": "Section: Error Handling in error-handling-guidelines.md"
+  },
+  {
+    "id": "task_004",
+    "title": "Ensure all API endpoints require authentication",
+    "description": "Every API endpoint must verify user authentication before processing requests to prevent unauthorized access.",
+    "category": "Security",
+    "severity": "critical",
+    "checkType": "Security Pattern Detection",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "@app.route('/api/users')\ndef get_users():\n    return users",
+    "suggestedFix": "@app.route('/api/users')\n@require_auth\ndef get_users():\n    return users",
+    "docReference": "Section: API Security in security-guidelines.pdf"
+  },
+  {
+    "id": "task_005",
+    "title": "Limit response time for API calls to under 200ms",
+    "description": "All API calls must respond within 200 milliseconds to ensure performance standards are met.",
+    "category": "Performance",
+    "severity": "warning",
+    "checkType": "Performance Measurement",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "def slow_api():\n    time.sleep(0.3)\n    return data",
+    "suggestedFix": "def fast_api():\n    return data",
+    "docReference": "Section: Performance Requirements in performance-guidelines.md"
+  },
+  {
+    "id": "task_006",
+    "title": "Require 80% test coverage for all modules",
+    "description": "All code modules must have at least 80% test coverage to ensure reliability and reduce bugs.",
+    "category": "Testing",
+    "severity": "warning",
+    "checkType": "Test Coverage Measurement",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "def function_to_test():\n    return True",
+    "suggestedFix": "def function_to_test():\n    return True\n# Add unit tests to achieve 80% coverage",
+    "docReference": "Section: Testing Requirements in testing-guidelines.md"
+  },
+  {
+    "id": "task_007",
+    "title": "Require docstrings for all public functions",
+    "description": "All public functions must include a docstring that describes their purpose and parameters.",
+    "category": "Documentation",
+    "severity": "warning",
+    "checkType": "Docstring Presence Check",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "def add(a, b):\n    return a + b",
+    "suggestedFix": "def add(a, b):\n    \"\"\"Add two numbers together.\"\"\"\n    return a + b",
+    "docReference": "Section: Documentation Requirements in documentation-guidelines.md"
+  },
+  {
+    "id": "task_008",
+    "title": "Enforce 4-space indentation",
+    "description": "All code must use 4 spaces for indentation to maintain consistency across the codebase.",
+    "category": "Code Style",
+    "severity": "warning",
+    "checkType": "Indentation Style Check",
+    "fileTypes": [
+      "*.py",
+      "*.js"
+    ],
+    "exampleViolation": "def example():\n\treturn True",
+    "suggestedFix": "def example():\n    return True",
+    "docReference": "Section: Code Style in style-guide.md"
+  }
+]
