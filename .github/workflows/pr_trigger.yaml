@@ -65,6 +65,7 @@ jobs:
 
           AUTHOR="${{ github.event.pull_request.user.login }}"
 
+          # This is a new comment
           jq -n \
             --arg repo        "${{ steps.meta.outputs.repo }}" \
             --arg pr_number   "${PR}" \
