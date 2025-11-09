@@ -208,3 +208,7 @@ __marimo__/
 backend/.env
 guardians-website/.env
 backend/data/*.db
+
+# Allow tracked frontend lib helpers
+!guardians-website/src/lib/
+!guardians-website/src/lib/**

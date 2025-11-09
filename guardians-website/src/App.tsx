@@ -9,7 +9,6 @@ import type {
   PageKey,
   PullRequest,
   Task,
-  TaskSetMetadata,
   UploadedFile,
 } from './types';
 import { generateTasksFromDocuments } from './services/taskGenerator';
@@ -83,7 +82,6 @@ function App() {
     totalFiles: 0,
   });
   const [showSuccess, setShowSuccess] = useState(false);
-  const [taskSetMetadata, setTaskSetMetadata] = useState<TaskSetMetadata | null>(null);
   const [isLoadingPRs, setIsLoadingPRs] = useState(false);
   const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
@@ -217,10 +215,7 @@ function App() {
   };
 
   const syncTasksToBackend = async (tasks: Task[]) => {
-    const metadata = await saveTaskSet(tasks);
-    if (metadata) {
-      setTaskSetMetadata(metadata);
-    }
+    await saveTaskSet(tasks);
   };
 
   const hydrateTasks = async () => {
@@ -230,7 +225,6 @@ function App() {
         ...prev,
         tasks: latest.tasks,
       }));
-      setTaskSetMetadata(latest.metadata);
     }
   };
 
