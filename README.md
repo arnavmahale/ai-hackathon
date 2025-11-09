@@ -20,6 +20,8 @@ Optional environment variables:
 | --- | --- |
 | `GUARDIANS_DATA_DIR` | Custom path for persisted JSON (defaults to `backend/data/`). |
 | `GUARDIANS_API_TOKEN` | If set, write endpoints require `Authorization: Bearer <token>`. |
+| `GITHUB_WEBHOOK_SECRET` | Secret for verifying GitHub webhook signatures (falls back to `GUARDIANS_API_TOKEN`). |
+| `GITHUB_ACCESS_TOKEN` | PAT/installation token used to call GitHub’s REST API for PR files. |
 
 ### GitHub Action integration
 
@@ -48,6 +50,19 @@ The workflow sends payloads like:
 ```
 
 The backend persists that data so the React PR monitor can fetch `/pull-requests` and `/pull-requests/{id}` for live statuses once the agent runs are wired up.
+
+### GitHub Webhook (alternative to Actions)
+
+If you prefer direct webhooks, deploy the FastAPI service (e.g., Render) and add a repo webhook pointing to:
+
+- **Payload URL:** `https://your-backend/github/webhook`
+- **Content type:** `application/json`
+- **Secret:** any string; set the same value in the backend env var `GITHUB_WEBHOOK_SECRET` (falls back to `GUARDIANS_API_TOKEN` if unset)
+- **Events:** “Let me select” → “Pull requests”
+
+The `/github/webhook` route only processes `opened`, `reopened`, or `synchronize` actions, verifies the signature, and stores the PR data just like the Action step. Use ngrok for local testing if needed (`ngrok http 8000` then register the HTTPS URL as the payload endpoint).
+
+To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes and stores the filenames alongside each PR record.
 
 ### Running the validator
 
