@@ -23,6 +23,7 @@ Optional environment variables:
 | `DATABASE_URL` | SQL database connection string (defaults to `sqlite:///backend/data/guardians.db`). |
 | `GITHUB_WEBHOOK_SECRET` | Secret for verifying GitHub webhook signatures (falls back to `GUARDIANS_API_TOKEN`). |
 | `GITHUB_ACCESS_TOKEN` | PAT/installation token used to call GitHub’s REST API for PR files. |
+| `VITE_FAKE_VIOLATIONS` | (Frontend) Set to `true` to display demo violation data for presentations. |
 
 ### GitHub Action integration
 

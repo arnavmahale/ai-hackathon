@@ -7,6 +7,7 @@ import type {
   AppState,
   GenerationState,
   PageKey,
+  PullRequest,
   Task,
   TaskSetMetadata,
   UploadedFile,
@@ -33,7 +34,44 @@ const generateId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2));
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const ENABLE_DEMO_VIOLATIONS = import.meta.env.VITE_FAKE_VIOLATIONS !== 'false';
+const DEMO_FILES = ['src/api/userService.ts', 'src/payments/processor.ts', 'src/auth/jwt.ts', 'src/utils/logger.ts'];
+
+function applyDemoViolations(prs: PullRequest[], tasks: Task[]): PullRequest[] {
+  if (!ENABLE_DEMO_VIOLATIONS) {
+    return prs;
+  }
+  const sourceTasks = tasks.length ? tasks : MOCK_TASKS;
+  if (!sourceTasks.length) {
+    return prs;
+  }
+  return prs.map((pr, index) => {
+    const existingDetails = pr.violationDetails ?? [];
+    if (existingDetails.length || pr.status === 'ready') {
+      return {
+        ...pr,
+        violationDetails: existingDetails,
+        summary: pr.summary ?? (existingDetails.length ? `Detected ${existingDetails.length} violation(s).` : 'All policy checks passed.'),
+      };
+    }
+    const sampleTasks = sourceTasks.slice(0, Math.min(2, sourceTasks.length));
+    const details = sampleTasks.map((task, offset) => ({
+      severity: task.severity,
+      rule: task.title,
+      message: `Policy "${task.title}" detected an issue in ${DEMO_FILES[(index + offset) % DEMO_FILES.length]}.`,
+      file: DEMO_FILES[(index + offset) % DEMO_FILES.length],
+      line: (offset + 1) * 12,
+      suggestedFix: task.suggestedFix ?? 'Review the internal standards document.',
+    }));
+    return {
+      ...pr,
+      status: pr.status === 'pending' ? 'violations' : pr.status,
+      violations: details.length,
+      violationDetails: details,
+      summary: `Detected ${details.length} policy violation(s).`,
+    };
+  });
+}
 
 function App() {
   const [state, setState] = useState<AppState>(initialState);
@@ -53,15 +91,22 @@ function App() {
     setIsLoadingPRs(true);
     try {
       const prs = await fetchPullRequests();
-      setState((prev) => ({
-        ...prev,
-        pullRequests: prs,
-      }));
+      setState((prev) => {
+        const withDemo = ENABLE_DEMO_VIOLATIONS
+          ? applyDemoViolations(prs, prev.tasks.length ? prev.tasks : MOCK_TASKS)
+          : prs;
+        return {
+          ...prev,
+          pullRequests: withDemo,
+        };
+      });
     } catch (error) {
       console.warn('Failed to fetch PRs, using mock data.', error);
       setState((prev) => ({
         ...prev,
-        pullRequests: MOCK_PRS,
+        pullRequests: ENABLE_DEMO_VIOLATIONS
+          ? applyDemoViolations(MOCK_PRS, prev.tasks.length ? prev.tasks : MOCK_TASKS)
+          : MOCK_PRS,
       }));
     } finally {
       setIsLoadingPRs(false);
