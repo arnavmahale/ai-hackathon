@@ -476,18 +476,22 @@ def main():
     if out_file_path:
         text = report if report.endswith("\n") else report + "\n"
         out_file_path.write_text(text, encoding="utf-8")
-        label = "JSON" if want_json else "text"
-        print(f"Report written to {out_file_path} ({label})")
+        if not want_json:
+            print(f"Report written to {out_file_path} (text)")
     else:
         print(report)
     render_time = time.perf_counter() - render_start
 
     total_time = time.perf_counter() - start_time
-    print(
+    timing_message = (
         "Timings — tasks: {:.2f}s, files: {:.2f}s, checks: {:.2f}s, output: {:.2f}s, total: {:.2f}s".format(
             tasks_load_time, files_collect_time, checks_time, render_time, total_time
         )
     )
+    if want_json:
+        print(timing_message, file=sys.stderr)
+    else:
+        print(timing_message)
 
     # If you want the script to exit non-zero when findings exist, uncomment:
     # if findings:
