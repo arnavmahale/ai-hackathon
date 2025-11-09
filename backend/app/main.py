@@ -103,6 +103,7 @@ def get_agent_results(pr_id: str):
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Results not found")
     return record
+
 @app.post("/github/webhook", status_code=status.HTTP_202_ACCEPTED)
 async def github_webhook(
     request: Request,
