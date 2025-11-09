@@ -333,7 +333,10 @@ def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path) ->
         if not included(p):
             continue
         code = read_text(p)
-        file_rel = p.resolve().relative_to(repo_root.resolve()).as_posix()
+        try:
+            file_rel = p.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            file_rel = p.resolve().as_posix()
         applicable: List[Tuple[int, Dict[str, Any], Dict[str, Any]]] = []
         for idx, rule in enumerate(rules):
             if not _rule_applies_to_file(rule, file_rel):

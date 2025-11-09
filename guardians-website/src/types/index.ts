@@ -45,7 +45,7 @@ export interface PullRequest {
   title: string;
   repository: string;
   author: { name: string; avatar: string };
-  status: 'ready' | 'violations' | 'critical';
+  status: 'pending' | 'ready' | 'violations' | 'critical';
   filesChanged: number;
   violations: number;
   linesAdded: number;

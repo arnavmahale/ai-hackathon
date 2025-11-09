@@ -1,4 +1,4 @@
-import type { PullRequest, Task, TaskSetMetadata } from '../types';
+import type { PullRequest, Task, TaskSetMetadata, Violation } from '../types';
 import { MOCK_PRS } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_GUARDIANS_API_URL;
@@ -18,7 +18,8 @@ export async function fetchPullRequests(): Promise<PullRequest[]> {
       throw new Error('Failed to fetch pull requests');
     }
     const data = await response.json();
-    return data.items ?? [];
+    const items = data.items ?? [];
+    return items.map(normalizePullRequest);
   } catch (error) {
     console.warn('[apiService] Falling back to mock PRs:', error);
     return MOCK_PRS;
@@ -93,4 +94,58 @@ export async function fetchLatestTaskSet(): Promise<{ tasks: Task[]; metadata: T
     console.warn('[apiService] Unable to fetch latest task set:', error);
     return null;
   }
+}
+
+function normalizePullRequest(item: any): PullRequest {
+  const violationDetails = normalizeViolations(item.result ?? item.violationDetails);
+  const repo = item.repository ?? 'unknown/unknown';
+  return {
+    id: item.id ?? `${repo}#PR-${item.number ?? 0}`,
+    number: Number(item.number ?? 0),
+    title: item.title ?? 'Untitled pull request',
+    repository: repo,
+    author: normalizeAuthor(item.author),
+    status: normalizeStatus(item.status),
+    filesChanged: item.files_changed ?? item.filesChanged ?? 0,
+    violations: item.violations ?? violationDetails.length,
+    linesAdded: item.lines_added ?? item.linesAdded ?? 0,
+    linesRemoved: item.lines_removed ?? item.linesRemoved ?? 0,
+    violationDetails,
+  };
+}
+
+function normalizeAuthor(author: any): PullRequest['author'] {
+  if (author && typeof author === 'object' && 'name' in author && 'avatar' in author) {
+    return author as PullRequest['author'];
+  }
+  const name = typeof author === 'string' && author.length ? author : 'Guardians Agent';
+  const seed = encodeURIComponent(name);
+  return {
+    name,
+    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${seed}`,
+  };
+}
+
+function normalizeStatus(status?: string): PullRequest['status'] {
+  if (status === 'ready' || status === 'violations' || status === 'critical') {
+    return status;
+  }
+  if (status === 'warnings') {
+    return 'violations';
+  }
+  return 'pending';
+}
+
+function normalizeViolations(entries?: any[]): Violation[] {
+  if (!Array.isArray(entries)) return [];
+  return entries
+    .filter(Boolean)
+    .map((entry) => ({
+      severity: (entry.severity ?? 'warning') as Violation['severity'],
+      rule: entry.task_id ?? entry.rule ?? entry.name ?? 'Policy check',
+      message: entry.message ?? 'Task violation detected.',
+      file: entry.file ?? 'unknown',
+      line: typeof entry.line === 'number' ? entry.line : 1,
+      suggestedFix: entry.suggested_fix ?? entry.suggestedFix ?? entry.fix,
+    }));
 }
