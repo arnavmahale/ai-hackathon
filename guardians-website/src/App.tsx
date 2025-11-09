@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigation } from './components/Navigation';
 import { OnboardingPage } from './components/OnboardingPage';
 import { TasksDashboard } from './components/TasksDashboard';
 import { PRMonitor } from './components/PRMonitor';
 import type {
-  AgentRunState,
-  AgentRunSummary,
   AppState,
   GenerationState,
   PageKey,
-  PullRequest,
   Task,
   TaskSetMetadata,
   UploadedFile,
 } from './types';
 import { generateTasksFromDocuments } from './services/taskGenerator';
-import { fetchLatestTaskSet, fetchPullRequests, saveTaskSet } from './services/apiService';
+import {
+  fetchLatestTaskSet,
+  fetchPullRequests,
+  rerunAllPullRequests,
+  rerunPullRequest,
+  saveTaskSet,
+} from './services/apiService';
 import { MOCK_PRS, MOCK_TASKS } from './services/mockData';
 
 const initialState: AppState = {
@@ -32,12 +35,6 @@ const generateId = () =>
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const defaultAgentRunState: AgentRunState = {
-  status: 'idle',
-  progress: 0,
-  currentStep: 'Awaiting QA run',
-};
-
 function App() {
   const [state, setState] = useState<AppState>(initialState);
   const [fileLibrary, setFileLibrary] = useState<Record<string, File>>({});
@@ -48,48 +45,33 @@ function App() {
     totalFiles: 0,
   });
   const [showSuccess, setShowSuccess] = useState(false);
-  const [agentRuns, setAgentRuns] = useState<Record<string, AgentRunState>>({});
   const [taskSetMetadata, setTaskSetMetadata] = useState<TaskSetMetadata | null>(null);
+  const [isLoadingPRs, setIsLoadingPRs] = useState(false);
   const uploadTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
-  const ensureAgentRuns = (prs: PullRequest[]) => {
-    setAgentRuns((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      prs.forEach((pr) => {
-        if (!next[pr.id]) {
-          next[pr.id] = { ...defaultAgentRunState };
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  };
-
-  useEffect(() => {
-    void hydrateTasks();
-    fetchPullRequests()
-      .then((prs) => {
-        setState((prev) => ({
-          ...prev,
-          pullRequests: prs,
-        }));
-        ensureAgentRuns(prs);
-      })
-      .catch(() => {
-        setState((prev) => ({
-          ...prev,
-          pullRequests: MOCK_PRS,
-        }));
-        ensureAgentRuns(MOCK_PRS);
-      });
+  const loadPullRequests = useCallback(async () => {
+    setIsLoadingPRs(true);
+    try {
+      const prs = await fetchPullRequests();
+      setState((prev) => ({
+        ...prev,
+        pullRequests: prs,
+      }));
+    } catch (error) {
+      console.warn('Failed to fetch PRs, using mock data.', error);
+      setState((prev) => ({
+        ...prev,
+        pullRequests: MOCK_PRS,
+      }));
+    } finally {
+      setIsLoadingPRs(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (state.pullRequests.length) {
-      ensureAgentRuns(state.pullRequests);
-    }
-  }, [state.pullRequests]);
+    void hydrateTasks();
+    void loadPullRequests();
+  }, [loadPullRequests]);
 
   useEffect(
     () => () => {
@@ -254,112 +236,40 @@ function App() {
     }));
   };
 
-  const handleStartMonitoring = () => navigate('monitor');
+  const handleStartMonitoring = useCallback(() => {
+    navigate('monitor');
+    void loadPullRequests();
+  }, [loadPullRequests]);
 
-  const handleRefreshPRs = async () => {
+  const handleRefreshPRs = useCallback(async () => {
+    await loadPullRequests();
+  }, [loadPullRequests]);
+
+  const handleRerunAll = useCallback(async () => {
     try {
-      const prs = await fetchPullRequests();
-      setState((prev) => ({ ...prev, pullRequests: prs }));
-      ensureAgentRuns(prs);
-      return prs;
+      setIsLoadingPRs(true);
+      await rerunAllPullRequests();
     } catch (error) {
-      console.warn('Failed to refresh PRs, using mock data.', error);
-      setState((prev) => ({ ...prev, pullRequests: MOCK_PRS }));
-      ensureAgentRuns(MOCK_PRS);
-      return MOCK_PRS;
+      console.error('Failed to rerun all PRs', error);
+    } finally {
+      await loadPullRequests();
     }
-  };
+  }, [loadPullRequests]);
 
-  const summarizeRun = (pr: PullRequest): AgentRunSummary => {
-    return {
-      totalChecks: state.tasks.length || 8,
-      violations: pr.violations,
-      severity: pr.status,
-      notes:
-        pr.status === 'ready'
-          ? 'No violations detected across required tasks.'
-          : `Detected ${pr.violations} violation(s) tied to ${pr.violationDetails.length} tasks.`,
-    };
-  };
+  const handleRerunSingle = useCallback(
+    async (prId: string) => {
+      try {
+        setIsLoadingPRs(true);
+        await rerunPullRequest(prId);
+      } catch (error) {
+        console.error(`Failed to rerun ${prId}`, error);
+      } finally {
+        await loadPullRequests();
+      }
+    },
+    [loadPullRequests],
+  );
 
-  const startAgentRunForPr = async (prId: string) => {
-    const pr = state.pullRequests.find((item) => item.id === prId);
-    if (!pr) return;
-
-    setAgentRuns((prev) => {
-      const current = prev[prId] ?? { ...defaultAgentRunState };
-      if (current.status === 'running') return prev;
-      return {
-        ...prev,
-        [prId]: {
-          ...current,
-          status: 'running',
-          progress: 5,
-          currentStep: 'Queueing run',
-          startedAt: new Date().toISOString(),
-          completedAt: undefined,
-          summary: undefined,
-        },
-      };
-    });
-
-    const timeline = [
-      { progress: 25, step: 'Loading repository snapshot' },
-      { progress: 45, step: 'Aligning docs → task matrix' },
-      { progress: 65, step: 'Scanning files for violations' },
-      { progress: 85, step: 'Scoring checks & preparing report' },
-    ];
-
-    for (const stage of timeline) {
-      await wait(800);
-      setAgentRuns((prev) => {
-        const current = prev[prId];
-        if (!current || current.status !== 'running') return prev;
-        return {
-          ...prev,
-          [prId]: {
-            ...current,
-            progress: stage.progress,
-            currentStep: stage.step,
-          },
-        };
-      });
-    }
-
-    const summary = summarizeRun(pr);
-    const finalStatus: AgentRunState['status'] =
-      pr.status === 'ready'
-        ? 'passed'
-        : pr.status === 'violations'
-          ? 'warnings'
-          : 'critical';
-
-    await wait(600);
-
-    setAgentRuns((prev) => {
-      const current = prev[prId];
-      if (!current) return prev;
-      return {
-        ...prev,
-        [prId]: {
-          ...current,
-          status: finalStatus,
-          progress: 100,
-          currentStep: 'Run complete',
-          completedAt: new Date().toISOString(),
-          summary,
-        },
-      };
-    });
-  };
-
-  const startAgentRunForAll = () => {
-    state.pullRequests.forEach((pr, index) => {
-      setTimeout(() => {
-        void startAgentRunForPr(pr.id);
-      }, index * 250);
-    });
-  };
 
   const currentPage = useMemo(() => {
     switch (state.currentPage) {
@@ -377,9 +287,9 @@ function App() {
         return (
           <PRMonitor
             pullRequests={state.pullRequests}
-            agentRuns={agentRuns}
-            onRunAll={startAgentRunForAll}
-            onRunSingle={startAgentRunForPr}
+            isLoading={isLoadingPRs}
+            onRunAll={handleRerunAll}
+            onRunSingle={handleRerunSingle}
             onBack={() => navigate('tasks')}
             onRefresh={handleRefreshPRs}
           />
@@ -399,7 +309,16 @@ function App() {
           />
         );
     }
-  }, [state, generationState, showSuccess, agentRuns]);
+  }, [
+    state,
+    generationState,
+    showSuccess,
+    isLoadingPRs,
+    handleRerunAll,
+    handleRerunSingle,
+    handleRefreshPRs,
+    handleStartMonitoring,
+  ]);
 
   return (
     <div className="min-h-screen bg-base font-inter text-text">

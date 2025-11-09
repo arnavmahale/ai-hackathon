@@ -1,72 +1,56 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, GitPullRequest, Loader2, RefreshCw, Shield } from 'lucide-react';
-import type { AgentRunState, PullRequest } from '../types';
+import type { PullRequest } from '../types';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Avatar } from '../ui/avatar';
-import { Progress } from '../ui/progress';
 
 interface PRMonitorProps {
   pullRequests: PullRequest[];
-  agentRuns: Record<string, AgentRunState>;
-  onRunAll: () => void;
-  onRunSingle: (prId: string) => void;
+  isLoading: boolean;
+  onRunAll: () => void | Promise<void>;
+  onRunSingle: (prId: string) => void | Promise<void>;
   onBack: () => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
 }
 
-const defaultRunState: AgentRunState = {
-  status: 'idle',
-  progress: 0,
-  currentStep: 'Awaiting QA run',
+const statusBadge = (status: PullRequest['status']) => {
+  switch (status) {
+    case 'critical':
+      return <Badge variant="critical">Critical</Badge>;
+    case 'violations':
+      return <Badge variant="warning">Warnings</Badge>;
+    case 'ready':
+      return <Badge variant="outline">Passed</Badge>;
+    default:
+      return <Badge variant="outline">Pending</Badge>;
+  }
 };
 
-const stepLabels = [
-  'Queueing run',
-  'Loading snapshot',
-  'Aligning docs',
-  'Scanning files',
-  'Aggregating',
-];
-
-const statusColor = (status: AgentRunState['status']) => {
+const statusAccent = (status: PullRequest['status']) => {
   switch (status) {
     case 'critical':
       return 'border-l-4 border-l-critical';
-    case 'warnings':
+    case 'violations':
       return 'border-l-4 border-l-warning';
-    case 'passed':
+    case 'ready':
       return 'border-l-4 border-l-success';
-    case 'running':
-      return 'border-l-4 border-l-accent';
     default:
       return 'border-l-4 border-l-border';
   }
 };
 
-const statusBadge = (status: AgentRunState['status']) => {
-  switch (status) {
-    case 'critical':
-      return <Badge variant="critical">Critical</Badge>;
-    case 'warnings':
-      return <Badge variant="warning">Warnings</Badge>;
-    case 'passed':
-      return <Badge variant="outline">Passed</Badge>;
-    case 'running':
-      return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-accent">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Running
-        </span>
-      );
-    default:
-      return <Badge variant="outline">Idle</Badge>;
+const formatTimestamp = (value?: string | null) => {
+  if (!value) return 'Not run yet';
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
   }
 };
 
 export function PRMonitor({
   pullRequests,
-  agentRuns,
+  isLoading,
   onRunAll,
   onRunSingle,
   onBack,
@@ -74,245 +58,251 @@ export function PRMonitor({
 }: PRMonitorProps) {
   const [active, setActive] = useState<'all' | string>('all');
 
-  const visiblePRs = useMemo(() => {
-    if (active === 'all') return pullRequests;
-    const selected = pullRequests.find((pr) => pr.id === active);
-    return selected ? [selected] : pullRequests;
-  }, [active, pullRequests]);
-
   const aggregate = useMemo(() => {
     return pullRequests.reduce(
       (acc, pr) => {
-        const run = agentRuns[pr.id] ?? defaultRunState;
         acc.total += 1;
-        acc.running += run.status === 'running' ? 1 : 0;
-        acc.passed += run.status === 'passed' ? 1 : 0;
-        acc.warnings += run.status === 'warnings' ? 1 : 0;
-        acc.critical += run.status === 'critical' ? 1 : 0;
+        if (pr.status === 'pending') acc.pending += 1;
+        if (pr.status === 'ready') acc.passed += 1;
+        if (pr.status === 'violations') acc.warnings += 1;
+        if (pr.status === 'critical') acc.critical += 1;
         return acc;
       },
-      { total: 0, running: 0, passed: 0, warnings: 0, critical: 0 },
+      { total: 0, pending: 0, passed: 0, warnings: 0, critical: 0 },
     );
-  }, [pullRequests, agentRuns]);
+  }, [pullRequests]);
 
-  const globalProgress = useMemo(() => {
-    const runs = Object.values(agentRuns);
-    if (!runs.length) return 0;
-    const activeRuns = runs.filter((run) => run.status === 'running');
-    if (activeRuns.length) {
-      return (
-        activeRuns.reduce((sum, run) => sum + run.progress, 0) /
-        Math.max(activeRuns.length, 1)
-      );
-    }
-    const completed = runs.filter((run) =>
-      ['passed', 'warnings', 'critical'].includes(run.status),
-    );
-    if (completed.length) return 100;
-    return 0;
-  }, [agentRuns]);
+  const selectedPR = active === 'all' ? null : pullRequests.find((pr) => pr.id === active) ?? null;
 
-  const activeStep = Math.min(
-    stepLabels.length - 1,
-    Math.floor(globalProgress / (100 / stepLabels.length)),
+  const renderEmpty = () => (
+    <div className="mt-10 rounded-3xl border border-dashed border-border/60 bg-panel/40 px-6 py-10 text-center text-textMuted">
+      <p className="text-lg font-semibold text-text">No pull requests to monitor yet</p>
+      <p className="mt-2 text-sm">
+        Once a webhook fires or you re-run a scan, the PR will appear here with its live policy status.
+      </p>
+    </div>
   );
+
+  const renderOverviewCards = () => (
+    <div className="mt-6 grid gap-4 md:grid-cols-2">
+      {pullRequests.map((pr) => (
+        <article
+          key={pr.id}
+          className={`rounded-3xl border border-border/70 bg-panel px-6 py-5 text-left transition hover:-translate-y-[2px] hover:bg-panelMuted/40 ${statusAccent(pr.status)}`}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-textMuted">#{pr.number}</p>
+              <p className="text-lg font-semibold text-text">{pr.title}</p>
+              <p className="text-sm text-textMuted">{pr.repository}</p>
+            </div>
+            {statusBadge(pr.status)}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3 text-sm text-textMuted">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em]">Files</p>
+              <p className="text-text font-semibold">{pr.filesChanged}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em]">Violations</p>
+              <p className="text-text font-semibold">{pr.violationDetails.length}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em]">Last run</p>
+              <p className="text-text font-semibold">{formatTimestamp(pr.lastRun)}</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={() => void onRunSingle(pr.id)} disabled={isLoading}>
+              <Shield className="mr-2 h-4 w-4" />
+              Re-run policy check
+            </Button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-textMuted hover:text-text"
+              onClick={() => setActive(pr.id)}
+            >
+              View details
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+
+  const renderDetail = () => {
+    if (!selectedPR) return renderOverviewCards();
+
+    return (
+      <div className="mt-6 space-y-6">
+        <article className={`rounded-3xl border border-border/70 bg-panel p-6 ${statusAccent(selectedPR.status)}`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-textMuted">#{selectedPR.number}</p>
+              <h2 className="text-2xl font-semibold text-text">{selectedPR.title}</h2>
+              <p className="text-sm text-textMuted">{selectedPR.repository}</p>
+            </div>
+            {statusBadge(selectedPR.status)}
+          </div>
+          <p className="mt-4 text-sm text-textMuted">
+            {selectedPR.summary ?? 'Awaiting first scan for this pull request.'}
+          </p>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-sm text-textMuted">
+            <div>
+              <dt className="uppercase tracking-[0.25em] text-xs">Last run</dt>
+              <dd className="text-text font-semibold">{formatTimestamp(selectedPR.lastRun)}</dd>
+            </div>
+            <div>
+              <dt className="uppercase tracking-[0.25em] text-xs">Files changed</dt>
+              <dd className="text-text font-semibold">{selectedPR.filesChanged}</dd>
+            </div>
+          </dl>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={() => void onRunSingle(selectedPR.id)} disabled={isLoading}>
+              <Shield className="mr-2 h-4 w-4" />
+              Re-run check
+            </Button>
+            <Button variant="outline" onClick={() => setActive('all')}>
+              Back to overview
+            </Button>
+          </div>
+        </article>
+
+        <article className="rounded-3xl border border-border/70 bg-panel p-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-text">Policy findings</h3>
+            <Badge variant="outline">{selectedPR.violationDetails.length} issues</Badge>
+          </div>
+          {selectedPR.violationDetails.length ? (
+            <ul className="mt-4 space-y-4">
+              {selectedPR.violationDetails.map((violation, index) => (
+                <li key={`${violation.rule}-${violation.file}-${index}`} className="rounded-2xl border border-border/50 bg-panelMuted/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-text">{violation.rule}</p>
+                      <p className="text-xs text-textMuted">
+                        {violation.file} · line {violation.line}
+                      </p>
+                    </div>
+                    <Badge variant={violation.severity === 'critical' ? 'critical' : violation.severity === 'warning' ? 'warning' : 'outline'}>
+                      {violation.severity.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm text-text">{violation.message}</p>
+                  {violation.suggestedFix && (
+                    <p className="mt-2 text-sm text-textMuted">
+                      <span className="font-semibold text-text">Suggested fix:</span> {violation.suggestedFix}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-border/60 bg-panelMuted/20 px-4 py-8 text-center text-sm text-textMuted">
+              No violations detected on the latest run.
+            </div>
+          )}
+        </article>
+      </div>
+    );
+  };
 
   return (
     <section className="mx-auto mt-10 flex max-w-6xl gap-6 px-6 pb-16 text-text">
       <aside className="w-72 border-r border-border/60 pr-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-textMuted">
-          PR Targets
-        </p>
-        <p className="mt-1 text-sm text-textMuted">{pullRequests.length} active</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-textMuted">PR Targets</p>
+        <p className="mt-1 text-sm text-textMuted">{pullRequests.length} tracked</p>
 
         <button
           type="button"
-          onClick={() => setActive('all')}
-          className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition ${
-            active === 'all'
-              ? 'bg-accent text-black'
-              : 'bg-panelMuted text-textMuted hover:text-text'
+          className={`mt-4 w-full rounded-2xl border border-border/60 px-4 py-3 text-left text-sm font-semibold transition ${
+            active === 'all' ? 'bg-panel text-text' : 'text-textMuted hover:bg-panelMuted/40'
           }`}
+          onClick={() => setActive('all')}
         >
-          <Shield className="mr-2 h-4 w-4" />
-          All PR runs
+          <div className="flex items-center gap-2">
+            <GitPullRequest className="h-4 w-4" />
+            <span>All pull requests</span>
+          </div>
         </button>
 
         <div className="mt-6 space-y-2">
-          {pullRequests.map((pr) => {
-            const run = agentRuns[pr.id] ?? defaultRunState;
-            const isActive = active === pr.id;
-            return (
-              <button
-                type="button"
-                key={pr.id}
-                onClick={() => setActive(pr.id)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition ${
-                  isActive ? 'bg-panelMuted text-text' : 'text-textMuted hover:bg-panelMuted/60'
-                }`}
-              >
+          {pullRequests.map((pr) => (
+            <button
+              key={pr.id}
+              type="button"
+              className={`w-full rounded-2xl border border-border/60 px-4 py-3 text-left text-sm transition ${
+                active === pr.id ? 'bg-panel text-text' : 'text-textMuted hover:bg-panelMuted/40'
+              }`}
+              onClick={() => setActive(pr.id)}
+            >
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-text">{pr.author.name}</p>
-                  <p className="text-xs text-textMuted">PR #{pr.number}</p>
+                  <p className="font-semibold text-text">{pr.title}</p>
                   <p className="text-xs text-textMuted">
-                    {run.status === 'running'
-                      ? 'Agent running...'
-                      : `Last status: ${run.status.toUpperCase()}`}
+                    {pr.repository} · #{pr.number}
                   </p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-textMuted" />
-              </button>
-            );
-          })}
+                {statusBadge(pr.status)}
+              </div>
+            </button>
+          ))}
+          {!pullRequests.length && <p className="text-xs text-textMuted">No pull requests yet.</p>}
         </div>
       </aside>
 
-      <div className="flex-1 space-y-6">
-        <header className="border-b border-border/60 px-2 pb-8 md:px-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-textMuted">Step 3 / Monitor</p>
-              <h1 className="text-[46px] font-semibold leading-tight text-text">
-                QA Agent Control Room
-              </h1>
-              <p className="text-sm text-textMuted">
-                Trigger targeted runs per pull request or scan the entire queue.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-sm font-medium text-textMuted">
-              <button type="button" onClick={onBack} className="hover:text-text">
-                Back to tasks
-              </button>
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="inline-flex items-center gap-2 text-accent hover:text-accentMuted"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh data
-              </button>
-              <Button className="gap-2" onClick={onRunAll}>
-                <Shield className="h-4 w-4" />
-                Run all checks
-              </Button>
-            </div>
+      <div className="flex-1">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-text transition hover:text-textMuted"
+              onClick={onBack}
+            >
+              ← Back to tasks
+            </button>
+            <p className="mt-2 text-xs uppercase tracking-[0.35em] text-textMuted">Guardians Monitor</p>
+            <h1 className="text-3xl font-semibold text-text">Pull request QA status</h1>
           </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            {[
-              { label: 'Active PRs', value: aggregate.total },
-              { label: 'Running', value: aggregate.running },
-              { label: 'Cleared', value: aggregate.passed },
-              { label: 'Critical / Warn', value: aggregate.critical + aggregate.warnings },
-            ].map((stat) => (
-              <div key={stat.label} className="space-y-2 text-sm text-textMuted">
-                <p className="text-xs uppercase tracking-[0.35em]">{stat.label}</p>
-                <p className="text-2xl font-semibold text-text">{stat.value}</p>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void onRefresh()} disabled={isLoading}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh data
+            </Button>
+            <Button className="gap-2" onClick={() => void onRunAll()} disabled={isLoading || !pullRequests.length}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+              Run all checks
+            </Button>
           </div>
         </header>
 
-        <div className="rounded-2xl border border-border/60 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-textMuted">
-            Run timeline
-          </p>
-          <div className="mt-4 space-y-3">
-            <div className="relative h-2 rounded-full bg-border">
-              <div
-                className="absolute h-full rounded-full bg-text"
-                style={{ width: `${globalProgress}%` }}
-              />
-              <span
-                className="absolute -top-1.5 h-4 w-4 rounded-full border-2 border-base bg-accent shadow-[0_0_0_3px_rgba(14,165,233,0.15)] animate-pulse"
-                style={{ left: `calc(${globalProgress}% - 8px)` }}
-              />
+        <div className="mt-6 grid gap-4 md:grid-cols-4">
+          {[
+            { label: 'Tracked', value: aggregate.total },
+            { label: 'Pending', value: aggregate.pending },
+            { label: 'Passed', value: aggregate.passed },
+            { label: 'Critical / Warn', value: aggregate.critical + aggregate.warnings },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-3xl border border-border/60 bg-panel px-4 py-3 text-sm text-textMuted">
+              <p className="text-xs uppercase tracking-[0.35em]">{stat.label}</p>
+              <p className="mt-1 text-2xl font-semibold text-text">{stat.value}</p>
             </div>
-            <div className="grid gap-3 text-xs text-textMuted md:grid-cols-5">
-              {stepLabels.map((label, index) => (
-                <div
-                  key={label}
-                  className={`rounded-lg border px-3 py-2 text-center ${
-                    index <= activeStep ? 'border-accent text-text' : 'border-border/60 text-textMuted'
-                  }`}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
 
-        <div className="space-y-4">
-          {visiblePRs.map((pr) => {
-            const run = agentRuns[pr.id] ?? defaultRunState;
-            return (
-              <article
-                key={pr.id}
-                className={`rounded-2xl border border-border/70 bg-transparent p-6 transition hover:-translate-y-[2px] hover:bg-panelMuted/40 ${statusColor(run.status)}`}
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-textMuted">
-                        PR #{pr.number}
-                      </span>
-                      {statusBadge(run.status)}
-                      <button
-                        type="button"
-                        onClick={() => setActive(pr.id)}
-                        className="text-xs font-semibold text-accent hover:text-accentMuted"
-                      >
-                        View findings
-                      </button>
-                    </div>
-                    <h3 className="text-xl font-semibold text-text">{pr.title}</h3>
-                    <p className="text-sm text-textMuted">{pr.repository}</p>
-                    <p className="text-xs text-textMuted">
-                      Files touched {pr.filesChanged} | +{pr.linesAdded} / -{pr.linesRemoved}
-                    </p>
-                    <p className="text-xs font-semibold text-critical">
-                      {pr.violations} violations
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-start gap-3 md:items-end">
-                    <div className="flex items-center gap-3">
-                      <Avatar
-                        src={pr.author.avatar}
-                        alt={pr.author.name}
-                        fallback={pr.author.name.charAt(0)}
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-text">{pr.author.name}</p>
-                        <p className="text-xs text-textMuted">Engineer</p>
-                      </div>
-                    </div>
-                    <div className="w-64">
-                      <Progress value={run.progress} />
-                      <p className="mt-2 text-xs text-textMuted">{run.currentStep}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => onRunSingle(pr.id)}
-                      disabled={run.status === 'running'}
-                    >
-                      {run.status === 'running' ? 'Running...' : 'Run Policy Check'}
-                    </Button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-          {!visiblePRs.length && (
-            <div className="rounded-2xl border border-dashed border-border/70 p-12 text-center text-textMuted">
-              <GitPullRequest className="mx-auto mb-4 h-12 w-12 text-textMuted" />
-              <p className="text-xl font-semibold text-text">No active pull requests</p>
-              <p className="text-sm text-textMuted">
-                PRs will appear here as soon as your team opens them.
-              </p>
-            </div>
-          )}
-        </div>
+        {isLoading && pullRequests.length === 0 ? (
+          <div className="mt-10 flex items-center gap-3 text-textMuted">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading pull requests...
+          </div>
+        ) : pullRequests.length === 0 ? (
+          renderEmpty()
+        ) : active === 'all' ? (
+          renderOverviewCards()
+        ) : (
+          renderDetail()
+        )}
       </div>
     </section>
   );

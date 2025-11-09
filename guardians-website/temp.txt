@@ -51,8 +51,6 @@ export interface PullRequest {
   linesAdded: number;
   linesRemoved: number;
   violationDetails: Violation[];
-  summary?: string;
-  lastRun?: string | null;
 }
 
 export interface AppState {

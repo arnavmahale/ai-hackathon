@@ -68,6 +68,9 @@ To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or G
 - `GET /pull-requests` (JSON)
 - `GET /pull-requests/{repo}#PR-{number}` (if calling manually, encode the `#` as `%23`; slashes are now handled by the route)
 - `GET /debug/pull-requests` (HTML table)
+- `GET /agent-results/{repo}#PR-{number}` (latest agent run payload)
+- `POST /pull-requests/{repo}#PR-{number}/rerun` (requeue a single PR)
+- `POST /pull-requests/rerun-all` (requeue every stored PR)
 
 Because we persist only the finished scan rows (or pending placeholders), you never have to read intermediate JSON files—everything lives in the SQL database (Postgres on Render or SQLite locally).
 

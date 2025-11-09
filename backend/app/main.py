@@ -95,6 +95,26 @@ def get_pull_request(pr_id: str):
     return record
 
 
+@app.post("/pull-requests/{pr_id:path}/rerun", status_code=status.HTTP_202_ACCEPTED)
+def rerun_pull_request(pr_id: str, _: None = Depends(require_token)):
+    updated = storage.mark_scan_pending(pr_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PR not found")
+    enqueue_scan(pr_id)
+    return {"status": "queued"}
+
+
+@app.post("/pull-requests/rerun-all", status_code=status.HTTP_202_ACCEPTED)
+def rerun_all_pull_requests(_: None = Depends(require_token)):
+    ids = storage.list_scan_ids()
+    if not ids:
+        return {"status": "queued", "count": 0}
+    for pr_id in ids:
+        storage.mark_scan_pending(pr_id)
+        enqueue_scan(pr_id)
+    return {"status": "queued", "count": len(ids)}
+
+
 @app.post("/agent-runs", response_model=AgentRunRecord, status_code=status.HTTP_202_ACCEPTED)
 def ingest_agent_run(payload: AgentRunIngestRequest, _: None = Depends(require_token)):
     record = payload.to_record()

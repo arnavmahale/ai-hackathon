@@ -187,6 +187,26 @@ def load_scan_result(pr_id: str) -> Optional[AgentRunRecord]:
         )
 
 
+def mark_scan_pending(pr_id: str) -> bool:
+    with get_session() as session:
+        row = session.get(ScanResult, pr_id)
+        if not row:
+            return False
+        row.status = "pending"
+        row.summary = "Awaiting agent run"
+        row.run_started_at = None
+        row.run_completed_at = None
+        row.violations = []
+        session.commit()
+        return True
+
+
+def list_scan_ids() -> List[str]:
+    with get_session() as session:
+        ids = session.exec(select(ScanResult.pr_id)).all()
+        return ids or []
+
+
 def _map_run_status(status: str) -> str:
     if status == "passed":
         return "ready"

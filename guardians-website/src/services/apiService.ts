@@ -96,6 +96,33 @@ export async function fetchLatestTaskSet(): Promise<{ tasks: Task[]; metadata: T
   }
 }
 
+export async function rerunPullRequest(prId: string): Promise<void> {
+  if (!hasApi) return;
+  const encodedId = encodeURIComponent(prId);
+  const response = await fetch(`${API_BASE_URL}/pull-requests/${encodedId}/rerun`, {
+    method: 'POST',
+    headers: {
+      ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to rerun PR (${response.status})`);
+  }
+}
+
+export async function rerunAllPullRequests(): Promise<void> {
+  if (!hasApi) return;
+  const response = await fetch(`${API_BASE_URL}/pull-requests/rerun-all`, {
+    method: 'POST',
+    headers: {
+      ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to rerun all PRs (${response.status})`);
+  }
+}
+
 function normalizePullRequest(item: any): PullRequest {
   const violationDetails = normalizeViolations(item.result ?? item.violationDetails);
   const repo = item.repository ?? 'unknown/unknown';
@@ -111,6 +138,8 @@ function normalizePullRequest(item: any): PullRequest {
     linesAdded: item.lines_added ?? item.linesAdded ?? 0,
     linesRemoved: item.lines_removed ?? item.linesRemoved ?? 0,
     violationDetails,
+    summary: item.summary ?? item.notes ?? (violationDetails.length ? `Detected ${violationDetails.length} violation(s).` : 'All policy checks passed.'),
+    lastRun: item.last_run ?? item.lastRun ?? null,
   };
 }
 

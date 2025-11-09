@@ -83,6 +83,8 @@ export const MOCK_PRS: PullRequest[] = [
     violations: 3,
     linesAdded: 542,
     linesRemoved: 132,
+    summary: 'Detected logging violations that require remediation.',
+    lastRun: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     violationDetails: [
       {
         severity: 'critical',
@@ -116,6 +118,8 @@ export const MOCK_PRS: PullRequest[] = [
     violations: 0,
     linesAdded: 245,
     linesRemoved: 12,
+    summary: 'All policy checks passed on last run.',
+    lastRun: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
     violationDetails: [],
   },
   {
@@ -132,6 +136,8 @@ export const MOCK_PRS: PullRequest[] = [
     violations: 6,
     linesAdded: 812,
     linesRemoved: 96,
+    summary: 'Critical payment retries issues detected.',
+    lastRun: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
     violationDetails: [
       {
         severity: 'critical',
