@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import glob
 import json
 import os
 import subprocess
@@ -423,16 +424,20 @@ def main():
 
     files_start = time.perf_counter()
     if args.files:
-        files: List[Path] = []
+        files_strs: List[str] = []
         for token in args.files:
-            files.extend(Path().glob(token))
-        seen: List[Path] = []
-        deduped: List[Path] = []
-        for candidate in files:
-            if candidate.is_file() and candidate not in seen:
-                seen.append(candidate)
-                deduped.append(candidate)
-        files = deduped
+            matches = glob.glob(token, recursive=True)
+            if matches:
+                files_strs.extend(matches)
+            else:
+                files_strs.append(token)
+        seen: List[str] = []
+        files = []
+        for candidate in files_strs:
+            path = Path(candidate)
+            if path.is_file() and str(path) not in seen:
+                seen.append(str(path))
+                files.append(path)
     else:
         base, head = args.git_diff
         files = list_changed_files_git(base, head)
