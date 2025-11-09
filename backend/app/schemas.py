@@ -66,6 +66,7 @@ class PullRequestSummary(BaseModel):
 class PullRequestRecord(PullRequestSummary):
     base_branch: str = Field(alias="baseBranch")
     head_branch: str = Field(alias="headBranch")
+    head_sha: Optional[str] = Field(default=None, alias="headSha")
     changed_files: List[str] = Field(default_factory=list, alias="changedFiles")
 
 
@@ -78,6 +79,7 @@ class PullRequestIngestRequest(BaseModel):
     author: str
     base_branch: str = Field(alias="baseBranch")
     head_branch: str = Field(alias="headBranch")
+    head_sha: Optional[str] = Field(default=None, alias="headSha")
     files_changed: int = Field(alias="filesChanged")
     lines_added: int = Field(alias="linesAdded")
     lines_removed: int = Field(alias="linesRemoved")
@@ -101,6 +103,7 @@ class PullRequestIngestRequest(BaseModel):
             lines_removed=self.lines_removed,
             base_branch=self.base_branch,
             head_branch=self.head_branch,
+            head_sha=self.head_sha,
             changed_files=self.changed_files,
         )
 
@@ -110,7 +113,8 @@ class PullRequestListResponse(BaseModel):
 
 
 class PullRequestDetail(PullRequestRecord):
-    pass
+    result: List[dict] = Field(default_factory=list)
+    summary: Optional[str] = None
 
 
 class AgentViolation(BaseModel):

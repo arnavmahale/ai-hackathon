@@ -82,7 +82,7 @@ def list_pull_requests():
 @app.post("/pull-requests", response_model=PullRequestSummary, status_code=status.HTTP_201_CREATED)
 def ingest_pull_request(payload: PullRequestIngestRequest, _: None = Depends(require_token)):
     record = payload.to_record()
-    summary = storage.upsert_pull_request(record)
+    summary = storage.upsert_scan_result(record)
     return summary
 
 
@@ -97,13 +97,13 @@ def get_pull_request(pr_id: str):
 @app.post("/agent-runs", response_model=AgentRunRecord, status_code=status.HTTP_202_ACCEPTED)
 def ingest_agent_run(payload: AgentRunIngestRequest, _: None = Depends(require_token)):
     record = payload.to_record()
-    storage.save_agent_run(record)
+    storage.save_scan_result(record)
     return record
 
 
 @app.get("/agent-results/{pr_id}", response_model=AgentRunRecord)
 def get_agent_results(pr_id: str):
-    record = storage.load_agent_run(pr_id)
+    record = storage.load_scan_result(pr_id)
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Results not found")
     return record
@@ -195,10 +195,11 @@ async def github_webhook(
         author=pr.get("user", {}).get("login", ""),
         base_branch=pr.get("base", {}).get("ref", ""),
         head_branch=pr.get("head", {}).get("ref", ""),
+        head_sha=pr.get("head", {}).get("sha"),
         files_changed=pr.get("changed_files", 0),
         lines_added=pr.get("additions", 0),
         lines_removed=pr.get("deletions", 0),
         changed_files=changed_files,
     )
-    storage.upsert_pull_request(pr_payload.to_record())
+    storage.upsert_scan_result(pr_payload.to_record())
     return {"status": "accepted"}

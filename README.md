@@ -63,7 +63,15 @@ If you prefer direct webhooks, deploy the FastAPI service (e.g., Render) and add
 
 The `/github/webhook` route only processes `opened`, `reopened`, or `synchronize` actions, verifies the signature, and stores the PR data just like the Action step. Use ngrok for local testing if needed (`ngrok http 8000` then register the HTTPS URL as the payload endpoint).
 
-To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes and stores the filenames alongside each PR record. All webhook/persistence data now live in the SQLite database specified by `DATABASE_URL`, so you can inspect it with `sqlite3 backend/data/guardians.db` (or any GUI) instead of scraping JSON files.
+To capture the per-file list for agent runs, set `GITHUB_ACCESS_TOKEN` (PAT or GitHub App token with `repo` scope). The webhook handler calls `GET /repos/{owner}/{repo}/pulls/{number}/files` behind the scenes, immediately enriches the payload, and stores only the **final scan record** (metadata + violations) in the database specified by `DATABASE_URL`. You can inspect the consolidated records via:
+
+- `GET /pull-requests` (JSON)
+- `GET /pull-requests/{repo}#PR-{number}`
+- `GET /debug/pull-requests` (HTML table)
+
+Because we persist only the finished scan rows (or pending placeholders), you never have to read intermediate JSON files—everything lives in the SQL database (Postgres on Render or SQLite locally).
+
+> **Breaking change:** If you were using the previous `pullrequest`/`agentrun` tables, drop/recreate the database (or start a new one). The schema now centers on a single `scanresult` table that stores both the PR metadata and the latest agent findings.
 
 ### Running the validator
 
