@@ -2,7 +2,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -12,6 +11,10 @@ from typing import Dict, List, Optional
 from .github_client import fetch_file_content
 from . import storage
 from .schemas import AgentRunIngestRequest, AgentViolation
+
+# Import validate_code functions for in-process RAG-enabled validation
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from validate_code import normalize_tasks_config, run_checks, Finding
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +75,18 @@ def _run_scan_sync(pr_id: str) -> None:
         logger.warning("No file contents fetched for %s", pr_id)
         return
 
+    # Get RAG retriever if documents have been ingested
+    retriever = None
+    try:
+        from .main import get_retriever
+        r = get_retriever()
+        if r.vector_store.size > 0:
+            retriever = r
+    except Exception:
+        pass
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        tasks_file = tmp_path / "tasks.json"
-        tasks_file.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
         temp_files: List[Path] = []
         path_map: Dict[str, str] = {}
         for rel_path, content in files_data:
@@ -86,26 +97,41 @@ def _run_scan_sync(pr_id: str) -> None:
             temp_files.append(dest)
             path_map[str(dest)] = rel_path
 
-        cmd = [sys.executable, str(VALIDATOR_PATH), "--tasks", str(tasks_file), "--files", *[str(p) for p in temp_files], "--json"]
         start = datetime.now(timezone.utc)
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=str(REPO_ROOT))
-            output = result.stdout.strip()
-            if not output:
-                logger.warning("Validator produced no output for %s", pr_id)
-                return
-            report = json.loads(output)
-        except subprocess.CalledProcessError as exc:
-            logger.error("Validator failed for %s: %s\n%s", pr_id, exc, exc.stderr)
-            return
-        except json.JSONDecodeError as exc:
-            logger.error("Invalid JSON from validator for %s: %s\n%s", pr_id, exc, result.stdout)
+            tasks_cfg = normalize_tasks_config(tasks)
+            findings, summary = run_checks(tasks_cfg, temp_files, tmp_path, retriever=retriever)
+        except Exception as exc:
+            logger.error("Validation failed for %s: %s", pr_id, exc)
             return
 
-    findings = report.get("findings", [])
-    violations = _build_violations(findings, tasks, path_map)
-    passed = bool(report.get("ALL_TASKS_MET"))
+    passed = len(findings) == 0
+    violations = _build_violations_from_findings(findings, tasks, path_map)
     _save_runner_result(pr_id, violations, passed, len(tasks), start)
+
+
+def _build_violations_from_findings(findings: List[Finding], tasks: List[dict], path_map: Dict[str, str]) -> List[AgentViolation]:
+    if not findings:
+        return []
+    title_map = {task.get("title") or task.get("name"): task for task in tasks}
+    id_map = {task.get("id"): task for task in tasks}
+    violations: List[AgentViolation] = []
+    for finding in findings:
+        task_info = title_map.get(finding.task) or id_map.get(finding.task)
+        severity = (task_info or {}).get("severity", "warning")
+        task_id = (task_info or {}).get("id", finding.task or "task")
+        rel_path = path_map.get(finding.file, finding.file)
+        violations.append(
+            AgentViolation(
+                taskId=task_id,
+                message=finding.message,
+                file=rel_path,
+                line=finding.line,
+                severity=severity,
+                suggestedFix=finding.fix,
+            )
+        )
+    return violations
 
 
 def _build_violations(findings: List[dict], tasks: List[dict], path_map: Dict[str, str]) -> List[AgentViolation]:

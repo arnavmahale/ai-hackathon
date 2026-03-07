@@ -13,6 +13,15 @@ class TaskSet(SQLModel, table=True):
     tasks: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
 
 
+class Document(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    doc_id: str = Field(index=True, unique=True)
+    filename: str
+    content: str
+    chunk_count: int = Field(default=0)
+    created_at: datetime
+
+
 class ScanResult(SQLModel, table=True):
     pr_id: str = Field(primary_key=True)
     repository: str

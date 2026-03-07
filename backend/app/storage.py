@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlmodel import select
 
 from .database import get_session
-from .models import TaskSet, ScanResult
+from .models import TaskSet, ScanResult, Document
 from .schemas import (
     Task,
     TaskMetadata,
@@ -209,6 +209,34 @@ def list_scan_ids() -> List[str]:
     with get_session() as session:
         ids = session.exec(select(ScanResult.pr_id)).all()
         return ids or []
+
+
+def save_document(doc_id: str, filename: str, content: str) -> None:
+    now = datetime.now(timezone.utc)
+    with get_session() as session:
+        row = session.exec(select(Document).where(Document.doc_id == doc_id)).first()
+        if row:
+            row.content = content
+            row.filename = filename
+            row.created_at = now
+        else:
+            row = Document(doc_id=doc_id, filename=filename, content=content, created_at=now)
+            session.add(row)
+        session.commit()
+
+
+def load_documents() -> List[dict]:
+    with get_session() as session:
+        rows = session.exec(select(Document).order_by(Document.created_at.desc())).all()
+        return [
+            {
+                "doc_id": row.doc_id,
+                "filename": row.filename,
+                "chunk_count": row.chunk_count,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ]
 
 
 def _map_run_status(status: str) -> str:

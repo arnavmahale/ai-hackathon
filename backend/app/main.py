@@ -1,13 +1,15 @@
 from __future__ import annotations
+import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 import html
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from .config import API_TOKEN, ensure_directories
+from .config import API_TOKEN, DATA_DIR, ensure_directories
 from .database import init_db
 from .security import verify_github_signature
 from .github_client import fetch_pull_request_files
@@ -24,8 +26,29 @@ from .schemas import (
 from . import storage
 from .runner import enqueue_scan
 
+logger = logging.getLogger(__name__)
+
 ensure_directories()
 init_db()
+
+# RAG retriever singleton — initialized lazily on first document ingest
+_retriever = None
+
+
+def get_retriever():
+    global _retriever
+    if _retriever is None:
+        from .rag import Retriever
+        _retriever = Retriever()
+        # Try to load persisted index
+        index_dir = DATA_DIR / "vector_index"
+        if (index_dir / "index.faiss").exists():
+            try:
+                _retriever.load(index_dir)
+                logger.info("Loaded persisted vector index")
+            except Exception:
+                logger.warning("Failed to load persisted vector index, starting fresh")
+    return _retriever
 
 app = FastAPI(title="Guardians API", version="0.1.0")
 app.add_middleware(
@@ -225,3 +248,70 @@ async def github_webhook(
     summary = storage.upsert_scan_result(pr_payload.to_record())
     enqueue_scan(summary.id)
     return {"status": "accepted"}
+
+
+# ===================== RAG Document Ingestion =====================
+
+@app.post("/documents", status_code=status.HTTP_201_CREATED)
+async def ingest_documents(
+    files: List[UploadFile] = File(...),
+    _: None = Depends(require_token),
+):
+    """Upload compliance/policy documents to build the RAG vector index.
+
+    Accepts PDF, markdown, or plain text files. Each file is chunked,
+    embedded, and stored in the FAISS vector index for retrieval during
+    code validation.
+    """
+    retriever = get_retriever()
+    results = []
+    for upload in files:
+        content = (await upload.read()).decode("utf-8", errors="ignore")
+        doc_id = upload.filename or f"doc-{len(results)}"
+
+        # Persist to DB
+        storage.save_document(doc_id, upload.filename or "unknown", content)
+
+        # Ingest into RAG pipeline
+        chunk_count = retriever.ingest_document(
+            text=content,
+            doc_id=doc_id,
+            metadata={"filename": upload.filename},
+        )
+        results.append({"doc_id": doc_id, "chunks": chunk_count})
+
+    # Persist the vector index to disk
+    retriever.save(DATA_DIR / "vector_index")
+
+    return {"documents": results, "total_chunks": sum(r["chunks"] for r in results)}
+
+
+@app.get("/documents")
+def list_documents():
+    """List all ingested compliance documents."""
+    docs = storage.load_documents()
+    return {"documents": docs}
+
+
+@app.get("/rag/status")
+def rag_status():
+    """Check the status of the RAG vector index."""
+    retriever = get_retriever()
+    return {
+        "document_count": retriever.document_count,
+        "chunk_count": retriever.chunk_count,
+        "vector_count": retriever.vector_store.size,
+    }
+
+
+class RAGQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+
+@app.post("/rag/query")
+def rag_query(body: RAGQueryRequest):
+    """Debug endpoint: query the RAG index directly."""
+    retriever = get_retriever()
+    results = retriever.query(body.query, top_k=body.top_k)
+    return {"results": results}

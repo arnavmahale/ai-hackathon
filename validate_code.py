@@ -179,8 +179,11 @@ refresh_openai_settings()
 AI_SYSTEM_PROMPT = (
     "You are CodeGuardian, an exacting code-compliance reviewer. "
     "For each task in the provided JSON array you must decide whether the file satisfies the requirement. "
+    "When REFERENCE DOCUMENTATION is provided, ground your decisions in those specific policy excerpts. "
+    "Cite the relevant doc section in your explanation when a reference supports your finding. "
     "Always respond with a JSON object that contains a 'tasks' array. "
     "Each entry must include: 'internalRef' (the integer provided), 'compliant' (boolean), 'explanation' (string), "
+    "'citations' (array of doc_id strings used), "
     "and 'violations' (array of {message,line,column,fix}). Line/column numbers are 1-indexed; use null when unknown."
 )
 
@@ -196,7 +199,12 @@ def _truncate_code(code: str, limit: Optional[int] = None) -> Tuple[str, bool]:
     return snippet, True
 
 
-def _build_ai_messages(task_payloads: List[Dict[str, Any]], file_rel: str, code: str) -> List[Dict[str, str]]:
+def _build_ai_messages(
+    task_payloads: List[Dict[str, Any]],
+    file_rel: str,
+    code: str,
+    rag_context: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, str]]:
     tasks_json = json.dumps(task_payloads, indent=2, ensure_ascii=False)
     code_snippet, truncated = _truncate_code(code)
     language = Path(file_rel).suffix.lstrip(".") or "text"
@@ -204,13 +212,29 @@ def _build_ai_messages(task_payloads: List[Dict[str, Any]], file_rel: str, code:
         "Tasks JSON:",
         tasks_json,
         "",
+    ]
+
+    # Inject RAG-retrieved document context when available
+    if rag_context:
+        user_parts.append("REFERENCE DOCUMENTATION (retrieved from company policy docs):")
+        for i, ctx in enumerate(rag_context):
+            doc_id = ctx.get("doc_id", f"doc_{i}")
+            score = ctx.get("score", 0)
+            text = ctx.get("text", "")
+            user_parts.append(f"--- [{doc_id}] (relevance score: {score:.2f}) ---")
+            user_parts.append(text)
+            user_parts.append("")
+        user_parts.append("Use the above references to ground your compliance decisions.")
+        user_parts.append("")
+
+    user_parts.extend([
         f"File: {file_rel}",
         f"Source code ({language}):",
         "```",
         code_snippet,
         "```",
         "Return JSON with a 'tasks' array matching the provided internalRef entries.",
-    ]
+    ])
     if truncated:
         user_parts.append("NOTE: Source truncated for length; focus on the visible code.")
     user_content = "\n".join(user_parts)
@@ -289,10 +313,15 @@ def _task_summary(rule: Dict[str, Any], idx: int) -> Dict[str, Any]:
     return summary
 
 
-def evaluate_tasks_with_ai(task_payloads: List[Dict[str, Any]], file_rel: str, code: str) -> List[Dict[str, Any]]:
+def evaluate_tasks_with_ai(
+    task_payloads: List[Dict[str, Any]],
+    file_rel: str,
+    code: str,
+    rag_context: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     if not task_payloads:
         return []
-    messages = _build_ai_messages(task_payloads, file_rel, code)
+    messages = _build_ai_messages(task_payloads, file_rel, code, rag_context=rag_context)
     response_text = _call_openai_chat(messages)
     try:
         ai_result = json.loads(response_text)
@@ -306,7 +335,7 @@ def evaluate_tasks_with_ai(task_payloads: List[Dict[str, Any]], file_rel: str, c
 
 # ===================== Runner =========================
 
-def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path) -> Tuple[List[Finding], Dict[str, Any]]:
+def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path, retriever: Any = None) -> Tuple[List[Finding], Dict[str, Any]]:
     findings: List[Finding] = []
     rules = tasks_cfg.get("rules", [])
     failed_rule_indexes: Set[int] = set()
@@ -344,8 +373,22 @@ def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path) ->
             applicable.append((idx, rule, _task_summary(rule, idx)))
         if not applicable:
             continue
+        # Retrieve relevant compliance doc chunks via RAG if available
+        rag_context = None
+        if retriever is not None:
+            try:
+                task_descriptions = " ".join(
+                    summary.get("description", "") for _, _, summary in applicable
+                )
+                rag_context = retriever.query_for_code(code, task_descriptions, top_k=3)
+            except Exception as exc:
+                # RAG failure is non-fatal; proceed without context
+                pass
+
         try:
-            ai_task_results = evaluate_tasks_with_ai([summary for (_, _, summary) in applicable], file_rel, code)
+            ai_task_results = evaluate_tasks_with_ai(
+                [summary for (_, _, summary) in applicable], file_rel, code, rag_context=rag_context
+            )
         except Exception as exc:
             message = f"AI evaluation failed: {exc}"
             for idx, rule, _ in applicable:
