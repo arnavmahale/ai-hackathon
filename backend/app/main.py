@@ -257,33 +257,92 @@ async def ingest_documents(
     files: List[UploadFile] = File(...),
     _: None = Depends(require_token),
 ):
-    """Upload compliance/policy documents to build the RAG vector index.
+    """Upload compliance/policy documents. This triggers the full pipeline:
 
-    Accepts PDF, markdown, or plain text files. Each file is chunked,
-    embedded, and stored in the FAISS vector index for retrieval during
-    code validation.
+    1. Chunk each document (recursive text splitting)
+    2. Embed chunks and store in FAISS vector index
+    3. Extract compliance tasks from each chunk via LLM
+    4. Store tasks linked to their source chunks
+
+    Each task knows exactly which document paragraph it came from.
+    At validation time, that source chunk is injected as grounding context.
     """
+    from .rag import chunk_document
+    from .rag.task_extractor import extract_tasks_from_chunks
+
     retriever = get_retriever()
+    all_extracted_tasks = []
     results = []
+
     for upload in files:
         content = (await upload.read()).decode("utf-8", errors="ignore")
         doc_id = upload.filename or f"doc-{len(results)}"
 
-        # Persist to DB
+        # Persist raw document to DB
         storage.save_document(doc_id, upload.filename or "unknown", content)
 
-        # Ingest into RAG pipeline
+        # Step 1 & 2: Chunk, embed, store in FAISS
         chunk_count = retriever.ingest_document(
             text=content,
             doc_id=doc_id,
             metadata={"filename": upload.filename},
         )
-        results.append({"doc_id": doc_id, "chunks": chunk_count})
+
+        # Step 3: Extract tasks from each chunk via LLM
+        chunks = chunk_document(text=content, doc_id=doc_id)
+        chunk_dicts = [
+            {"text": c.text, "doc_id": c.doc_id, "chunk_index": c.chunk_index}
+            for c in chunks
+        ]
+
+        try:
+            extracted = extract_tasks_from_chunks(chunk_dicts)
+            all_extracted_tasks.extend(extracted)
+            logger.info("Extracted %d tasks from %s", len(extracted), doc_id)
+        except Exception as exc:
+            logger.error("Task extraction failed for %s: %s", doc_id, exc)
+
+        results.append({
+            "doc_id": doc_id,
+            "chunks": chunk_count,
+            "tasks_extracted": len([t for t in all_extracted_tasks if t.get("source_chunk", {}).get("doc_id") == doc_id]),
+        })
 
     # Persist the vector index to disk
     retriever.save(DATA_DIR / "vector_index")
 
-    return {"documents": results, "total_chunks": sum(r["chunks"] for r in results)}
+    # Step 4: Save extracted tasks (with source chunk links) as a task set
+    if all_extracted_tasks:
+        from .schemas import Task
+        tasks = []
+        for t in all_extracted_tasks:
+            try:
+                tasks.append(Task(
+                    id=t.get("id", "unknown"),
+                    title=t.get("title", "Untitled"),
+                    description=t.get("description", ""),
+                    category=t.get("category", "General"),
+                    severity=t.get("severity", "warning"),
+                    checkType=t.get("checkType", "Pattern Detection"),
+                    fileTypes=t.get("fileTypes", ["*.py", "*.js"]),
+                    exampleViolation=t.get("exampleViolation", ""),
+                    suggestedFix=t.get("suggestedFix", ""),
+                    docReference=t.get("docReference", ""),
+                ))
+            except Exception:
+                continue
+        if tasks:
+            # Store tasks with source_chunk metadata preserved
+            storage.save_task_set(tasks)
+            # Also store the raw tasks with source chunks for validation
+            storage.save_task_set_raw(all_extracted_tasks)
+            logger.info("Saved %d tasks from document ingestion", len(tasks))
+
+    return {
+        "documents": results,
+        "total_chunks": sum(r["chunks"] for r in results),
+        "total_tasks_extracted": len(all_extracted_tasks),
+    }
 
 
 @app.get("/documents")

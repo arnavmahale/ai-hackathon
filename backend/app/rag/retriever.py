@@ -1,6 +1,5 @@
 """Retriever: orchestrates chunking, embedding, storage, and query.
-
-This is the main entry point for the RAG pipeline. It handles:
+This is the main entry point for the RAG pipeline
 1. Ingesting documents (chunk -> embed -> store)
 2. Querying relevant context for code sections
 """
@@ -54,16 +53,7 @@ class Retriever:
         doc_id: str,
         metadata: Optional[dict] = None,
     ) -> int:
-        """Chunk and embed a document, adding it to the vector store.
-
-        Args:
-            text: Full document text.
-            doc_id: Unique document identifier.
-            metadata: Extra metadata for all chunks.
-
-        Returns:
-            Number of chunks created.
-        """
+        """Chunk and embed a document, adding it to the vector store."""
         chunks = chunk_document(
             text=text,
             doc_id=doc_id,

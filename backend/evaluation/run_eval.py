@@ -4,6 +4,8 @@ Run with: python -m evaluation.run_eval
 from the backend/ directory.
 
 Evaluates both RAG retrieval quality and LLM verdict accuracy.
+Uses the EvaluationSuite for comprehensive multi-K retrieval metrics
+(Precision, Recall, F1, NDCG at K=1,3,5,10 plus MAP and MRR).
 """
 from __future__ import annotations
 
@@ -16,7 +18,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from evaluation.eval_retrieval import evaluate_retrieval
+from evaluation.eval_retrieval import (
+    EvaluationSuite,
+    RetrievalEvalExample,
+    evaluate_retrieval,
+)
 from evaluation.eval_llm import (
     evaluate_llm_verdicts,
     accuracy,
@@ -47,24 +53,26 @@ def run_retrieval_eval() -> dict:
         print(f"  Ingested '{doc_id}': {n} chunks")
 
     print(f"\n  Total vectors in index: {retriever.vector_store.size}")
-    print(f"  Running {len(RETRIEVAL_TEST_QUERIES)} retrieval queries...\n")
 
-    results = evaluate_retrieval(RETRIEVAL_TEST_QUERIES, retriever, k=3)
+    # Build evaluation examples
+    examples = [
+        RetrievalEvalExample(
+            query=q["query"],
+            relevant_doc_ids=q["relevant_doc_ids"],
+            description=q.get("description", ""),
+        )
+        for q in RETRIEVAL_TEST_QUERIES
+    ]
 
-    print(f"  Mean Precision@3: {results['mean_precision@k']:.3f}")
-    print(f"  Mean Recall@3:    {results['mean_recall@k']:.3f}")
-    print(f"  Mean MRR:         {results['mean_mrr']:.3f}")
-    print(f"  Mean NDCG@3:      {results['mean_ndcg@k']:.3f}")
+    # Run comprehensive multi-K evaluation
+    suite = EvaluationSuite(
+        retriever=retriever,
+        examples=examples,
+        k_values=[1, 3, 5, 10],
+    )
+    report = suite.run_and_print()
 
-    print("\n  Per-query breakdown:")
-    for pq in results["per_query"]:
-        status = "PASS" if pq["recall@k"] >= 0.5 else "FAIL"
-        print(f"    [{status}] {pq['query'][:50]}...")
-        print(f"         Expected: {pq['relevant_doc_ids']}")
-        print(f"         Got:      {pq['retrieved_doc_ids']}")
-        print(f"         P@3={pq['precision@k']:.2f} R@3={pq['recall@k']:.2f} MRR={pq['mrr']:.2f}")
-
-    return results
+    return report
 
 
 def run_llm_eval() -> dict:
@@ -103,11 +111,20 @@ def run_llm_eval() -> dict:
         if not pc["correct"]:
             print(f"         Expected: compliant={pc['expected_compliant']}")
             print(f"         Got:      compliant={pc['predicted_compliant']}")
+            if pc.get("error"):
+                print(f"         Error:    {pc['error']}")
 
     return results
 
 
 def main():
+    # Load .env file for API keys
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        from validate_code import load_env_file, refresh_openai_settings
+        load_env_file(env_path)
+        refresh_openai_settings()
+
     print("Code Guardian Evaluation Suite")
     print("=" * 60)
 
@@ -120,15 +137,17 @@ def main():
     print("=" * 60)
 
     if retrieval_results:
-        print(f"  RAG Retrieval:  MRR={retrieval_results['mean_mrr']:.3f}, "
-              f"NDCG@3={retrieval_results['mean_ndcg@k']:.3f}")
+        agg = retrieval_results.get("aggregate", {})
+        print(f"  RAG Retrieval:  MAP={agg.get('map', 0):.3f}, "
+              f"MRR={agg.get('mean_mrr', 0):.3f}, "
+              f"NDCG@3={agg.get('mean_ndcg@3', 0):.3f}")
     if llm_results:
         print(f"  LLM Verdicts:   F1={llm_results['f1_score']:.3f}, "
               f"Accuracy={llm_results['accuracy']:.3f}")
 
     # Save results to file
     output = {
-        "retrieval": {k: v for k, v in retrieval_results.items() if k != "per_query"} if retrieval_results else {},
+        "retrieval": retrieval_results.get("aggregate", {}) if retrieval_results else {},
         "llm": {k: v for k, v in llm_results.items() if k != "per_case"} if llm_results else {},
     }
     output_path = Path(__file__).parent / "eval_results.json"

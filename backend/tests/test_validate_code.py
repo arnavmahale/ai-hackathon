@@ -73,6 +73,30 @@ class TestBuildAIMessages:
         content = messages[1]["content"]
         assert "REFERENCE DOCUMENTATION" not in content
 
+    def test_multiple_rag_contexts(self):
+        payloads = [{"internalRef": 0, "name": "test", "description": "desc"}]
+        rag_context = [
+            {"doc_id": "sec-doc", "text": "Use JWT auth", "score": 0.3},
+            {"doc_id": "quality-doc", "text": "Use camelCase", "score": 0.6},
+        ]
+        messages = _build_ai_messages(payloads, "test.py", "code", rag_context=rag_context)
+        content = messages[1]["content"]
+        assert "sec-doc" in content
+        assert "quality-doc" in content
+        assert "Use JWT auth" in content
+        assert "Use camelCase" in content
+
+    def test_source_chunk_context_format(self):
+        """Source chunks from linked tasks use score 0.0 (direct link, not search)."""
+        payloads = [{"internalRef": 0, "name": "test"}]
+        rag_context = [
+            {"doc_id": "policy.md", "text": "All endpoints must use auth", "score": 0.0},
+        ]
+        messages = _build_ai_messages(payloads, "test.py", "code", rag_context=rag_context)
+        content = messages[1]["content"]
+        assert "policy.md" in content
+        assert "All endpoints must use auth" in content
+
     def test_truncation_note(self):
         payloads = [{"internalRef": 0, "name": "test"}]
         long_code = "x" * 10000

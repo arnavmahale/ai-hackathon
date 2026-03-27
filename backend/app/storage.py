@@ -33,6 +33,20 @@ def save_task_set(tasks: List[Task]) -> TaskMetadata:
     )
 
 
+def save_task_set_raw(tasks: List[dict]) -> None:
+    """Save raw tasks with source_chunk metadata intact.
+
+    These are used at validation time to provide linked doc context
+    without needing a separate RAG query.
+    """
+    now = datetime.now(timezone.utc)
+    task_set_id = f"taskset-raw-{now.isoformat().replace(':', '-')}"
+    with get_session() as session:
+        entry = TaskSet(task_set_id=task_set_id, created_at=now, task_count=len(tasks), tasks=tasks)
+        session.add(entry)
+        session.commit()
+
+
 def load_latest_tasks_payload() -> Optional[dict]:
     with get_session() as session:
         statement = select(TaskSet).order_by(TaskSet.created_at.desc()).limit(1)

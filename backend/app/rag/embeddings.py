@@ -1,5 +1,4 @@
 """Embedding client for generating vector representations of text.
-
 Uses OpenAI's text-embedding-3-small model by default.
 """
 from __future__ import annotations
@@ -21,7 +20,7 @@ OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings"
 
 
 class EmbeddingClient:
-    """Generates embeddings via OpenAI API."""
+    #Generates embeddings via OpenAI API.
 
     def __init__(
         self,
@@ -34,21 +33,15 @@ class EmbeddingClient:
         self.dimensions = dimensions
 
     def embed_texts(self, texts: List[str]) -> np.ndarray:
-        """Embed a batch of texts into vectors.
+        #Embed a batch of texts into vectors.
 
-        Args:
-            texts: List of strings to embed.
-
-        Returns:
-            numpy array of shape (len(texts), dimensions).
-        """
         if not texts:
             return np.array([]).reshape(0, self.dimensions)
 
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is required for generating embeddings.")
 
-        # OpenAI batch limit is 2048 texts; split if needed
+        # OpenAI batch limit is 2048 texts so split if needed
         all_embeddings = []
         batch_size = 512
         for i in range(0, len(texts), batch_size):
@@ -59,11 +52,8 @@ class EmbeddingClient:
         return np.array(all_embeddings, dtype=np.float32)
 
     def embed_query(self, query: str) -> np.ndarray:
-        """Embed a single query string.
+        #Embed a single query string.
 
-        Returns:
-            1D numpy array of shape (dimensions,).
-        """
         result = self.embed_texts([query])
         return result[0]
 

@@ -373,17 +373,62 @@ def run_checks(tasks_cfg: Dict[str, Any], files: List[Path], repo_root: Path, re
             applicable.append((idx, rule, _task_summary(rule, idx)))
         if not applicable:
             continue
-        # Retrieve relevant compliance doc chunks via RAG if available
+        # RAG context assembly: combine FAISS retrieval + linked source chunks,
+        # then rerank all candidates with a cross-encoder to get the top 3.
         rag_context = None
+        all_candidates = []
+        seen_texts = set()
+
+        # Source 1: Linked source chunks from tasks (direct lookup)
+        for _, rule, _ in applicable:
+            chunk_info = rule.get("source_chunk") or (rule.get("ai_spec") or {}).get("source_chunk")
+            if chunk_info and isinstance(chunk_info, dict):
+                text = chunk_info.get("text", "")
+                text_hash = hash(text)
+                if text_hash not in seen_texts and text.strip():
+                    seen_texts.add(text_hash)
+                    all_candidates.append({
+                        "doc_id": chunk_info.get("doc_id", "unknown"),
+                        "text": text,
+                        "source": "linked_chunk",
+                    })
+
+        # Source 2: FAISS similarity search (retrieves additional relevant chunks)
         if retriever is not None:
             try:
                 task_descriptions = " ".join(
                     summary.get("description", "") for _, _, summary in applicable
                 )
-                rag_context = retriever.query_for_code(code, task_descriptions, top_k=3)
-            except Exception as exc:
-                # RAG failure is non-fatal; proceed without context
+                faiss_results = retriever.query_for_code(code, task_descriptions, top_k=10)
+                for result in faiss_results:
+                    text = result.get("text", "")
+                    text_hash = hash(text)
+                    if text_hash not in seen_texts and text.strip():
+                        seen_texts.add(text_hash)
+                        all_candidates.append({
+                            "doc_id": result.get("doc_id", "unknown"),
+                            "text": text,
+                            "source": "faiss_retrieval",
+                            "faiss_score": result.get("score", 0.0),
+                        })
+            except Exception:
                 pass
+
+        # Rerank all candidates with cross-encoder, take top 3
+        if all_candidates:
+            rerank_query = " ".join(
+                summary.get("description", "") for _, _, summary in applicable
+            )
+            try:
+                # Import reranker — try both path configurations
+                try:
+                    from backend.app.rag.reranker import rerank as _rerank
+                except ImportError:
+                    from app.rag.reranker import rerank as _rerank
+                rag_context = _rerank(rerank_query, all_candidates, top_k=3)
+            except (ImportError, Exception):
+                # Reranker not available — use candidates as-is
+                rag_context = all_candidates[:3]
 
         try:
             ai_task_results = evaluate_tasks_with_ai(
